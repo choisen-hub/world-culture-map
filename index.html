@@ -1,0 +1,1973 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>세계 문화 지도 🌍 World Culture Map</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+--catholic:#4a90d9;--protestant:#6ec6ff;--orthodox:#1e3a5f;
+--sunni:#2ecc71;--shia:#1a8a4a;--ibadi:#0d6b3a;
+--buddhism:#f1c40f;--hinduism:#e67e22;--judaism:#9b59b6;
+--none:#95a5a6;--traditional:#e74c3c;--other:#7f8c8d;
+--bg:#0a0a14;--surface:#0f0f1e;--surface2:#161628;--border:rgba(255,255,255,.08)
+}
+body{background:var(--bg);color:#e0e0e0;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;overflow:hidden;height:100vh;display:flex;flex-direction:column}
+header{text-align:center;padding:8px 16px 2px;flex-shrink:0;position:relative}
+header h1{font-size:clamp(14px,3vw,22px);font-weight:600;letter-spacing:1px}
+
+/* Tabs */
+#tabs{display:flex;justify-content:center;gap:2px;padding:4px 10px 0;flex-shrink:0;flex-wrap:wrap}
+.tab-btn{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);border-bottom:none;border-radius:8px 8px 0 0;padding:6px 14px;font-size:12px;color:#888;cursor:pointer;transition:all .2s;white-space:nowrap;display:flex;align-items:center;gap:4px}
+.tab-btn:hover{background:rgba(255,255,255,.08);color:#ccc}
+.tab-btn.active{background:var(--surface);color:#fff;border-color:rgba(255,255,255,.12)}
+.tab-icon{font-size:14px}
+
+#main{flex:1;display:flex;overflow:hidden;position:relative}
+#map-container{flex:1;position:relative;overflow:hidden}
+svg#map{width:100%;height:100%;display:block}
+.country{stroke:#1a1a2e;stroke-width:.4px;cursor:pointer;transition:opacity .15s}
+.country:hover{opacity:.8;stroke:#fff;stroke-width:1.2px}
+.country.selected{stroke:#fff;stroke-width:2px;filter:brightness(1.3)}
+
+#tooltip{position:absolute;pointer-events:none;background:rgba(10,10,20,.95);border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.6;display:none;max-width:320px;backdrop-filter:blur(10px);box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:10}
+.tt-name{font-size:15px;font-weight:600;margin-bottom:4px}
+.tt-religion{color:#bbb;font-size:12px}
+.tt-bar{height:6px;border-radius:3px;margin:2px 0;background:#222}
+.tt-bar-fill{height:100%;border-radius:3px}
+.tt-dish{margin:3px 0;font-size:12px;color:#ccc}
+.tt-dish-name{font-weight:600;color:#fff}
+.tt-greeting{font-size:16px;margin:4px 0;color:#f1c40f}
+.tt-info{font-size:12px;color:#bbb;margin:2px 0}
+.tt-label{color:#666;font-size:10px;text-transform:uppercase;letter-spacing:.5px}
+
+#legend{position:absolute;bottom:12px;left:12px;background:rgba(10,10,20,.9);border:1px solid var(--border);border-radius:12px;padding:12px 14px;font-size:11px;backdrop-filter:blur(12px);z-index:5;max-height:calc(100vh - 140px);overflow-y:auto}
+#legend h3{font-size:12px;margin-bottom:8px;color:#888;font-weight:500}
+.legend-item{display:flex;align-items:center;gap:6px;margin:3px 0;white-space:nowrap}
+.legend-icon{font-size:14px;width:18px;text-align:center;flex-shrink:0}
+.legend-color{width:20px;height:10px;border-radius:3px;flex-shrink:0}
+
+#stats-sidebar{width:280px;background:var(--surface);border-left:1px solid var(--border);overflow-y:auto;flex-shrink:0;display:flex;flex-direction:column;gap:0}
+#stats-sidebar.collapsed{width:0;border:none;overflow:hidden}
+#stats-toggle{position:absolute;right:0;top:50%;transform:translateY(-50%);z-index:6;background:var(--surface);border:1px solid var(--border);border-right:none;border-radius:8px 0 0 8px;padding:8px 4px;cursor:pointer;color:#888;font-size:14px;transition:all .2s}
+#stats-toggle:hover{color:#fff;background:var(--surface2)}
+.stats-section{padding:14px 16px;border-bottom:1px solid var(--border)}
+.stats-section h3{font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;font-weight:600}
+.stats-section h4{font-size:11px;color:#555;margin:10px 0 6px;font-weight:500}
+.global-bar{margin:5px 0}
+.global-bar-label{display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px;align-items:center}
+.global-bar-label .gb-icon{font-size:13px}
+.global-bar-track{height:10px;background:rgba(255,255,255,.04);border-radius:5px;overflow:hidden;position:relative}
+.global-bar-fill{height:100%;border-radius:5px;transition:width .8s cubic-bezier(.4,0,.2,1)}
+.global-bar-pct{font-variant-numeric:tabular-nums;color:#888}
+
+.continent-chart{margin:4px 0}
+.continent-row{margin:6px 0}
+.continent-name{font-size:10px;color:#888;margin-bottom:2px;font-weight:600}
+.continent-stack{height:14px;border-radius:4px;overflow:hidden;display:flex;position:relative}
+.continent-seg{height:100%;transition:width .8s;min-width:1px}
+
+#panel-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:50;opacity:0;pointer-events:none;transition:opacity .3s}
+#panel-overlay.open{opacity:1;pointer-events:auto}
+#panel{position:fixed;top:0;right:0;width:440px;max-width:100vw;height:100vh;background:var(--surface);border-left:1px solid var(--border);z-index:51;transform:translateX(100%);transition:transform .35s cubic-bezier(.4,0,.2,1);overflow-y:auto;display:flex;flex-direction:column}
+#panel.open{transform:translateX(0)}
+#panel-close{position:sticky;top:0;z-index:2;display:flex;justify-content:flex-end;padding:10px 14px;background:linear-gradient(var(--surface),transparent)}
+#panel-close button{background:rgba(255,255,255,.06);border:1px solid var(--border);color:#888;font-size:18px;cursor:pointer;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;transition:all .2s}
+#panel-close button:hover{background:rgba(255,255,255,.12);color:#fff}
+.panel-header{padding:0 24px 20px;text-align:center}
+.panel-flag{font-size:56px;line-height:1;margin-bottom:4px}
+.panel-country{font-size:24px;font-weight:700}
+.panel-country-en{font-size:13px;color:#666;margin-top:2px}
+.panel-section{padding:18px 24px;border-top:1px solid var(--border)}
+.panel-section h3{font-size:12px;color:#777;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:14px;font-weight:600;display:flex;align-items:center;gap:6px}
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.info-item{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.04);border-radius:10px;padding:10px 12px}
+.info-label{font-size:9px;color:#555;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
+.info-value{font-size:13px;font-weight:500}
+
+.panel-donut-wrap{display:flex;align-items:center;gap:16px;margin-bottom:16px}
+.panel-donut-svg{flex-shrink:0}
+.panel-donut-legend{flex:1;font-size:12px}
+.pdl-item{display:flex;align-items:center;gap:6px;margin:4px 0}
+.pdl-icon{font-size:14px;width:18px;text-align:center}
+.pdl-color{width:10px;height:10px;border-radius:2px;flex-shrink:0}
+.pdl-pct{color:#777;margin-left:auto;font-variant-numeric:tabular-nums;font-size:11px}
+
+.p-hbar{margin:5px 0}
+.p-hbar-label{font-size:11px;margin-bottom:2px;display:flex;justify-content:space-between;align-items:center}
+.p-hbar-icon{font-size:13px}
+.p-hbar-track{height:8px;background:rgba(255,255,255,.05);border-radius:4px;overflow:hidden}
+.p-hbar-fill{height:100%;border-radius:4px;transition:width .6s cubic-bezier(.4,0,.2,1)}
+
+.religion-desc{font-size:12px;color:#999;line-height:1.6;margin-top:10px;padding:12px 14px;background:rgba(255,255,255,.02);border-radius:10px;border-left:3px solid #444}
+.tag{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:14px;font-size:11px;font-weight:600;margin:3px 3px 3px 0}
+.tag-free{background:rgba(46,204,113,.12);color:#2ecc71;border:1px solid rgba(46,204,113,.25)}
+.tag-partial{background:rgba(241,196,15,.12);color:#f1c40f;border:1px solid rgba(241,196,15,.25)}
+.tag-restricted{background:rgba(231,76,60,.12);color:#e74c3c;border:1px solid rgba(231,76,60,.25)}
+.tag-state{background:rgba(74,144,217,.12);color:#4a90d9;border:1px solid rgba(74,144,217,.25)}
+
+/* Food/Movie/Politics panel cards */
+.dish-card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:12px;margin:8px 0}
+.dish-name{font-size:14px;font-weight:600;margin-bottom:4px}
+.dish-name-en{font-size:11px;color:#666}
+.dish-desc{font-size:12px;color:#999;margin-top:4px}
+.dish-flavor{display:inline-block;font-size:10px;color:#f1c40f;background:rgba(241,196,15,.1);padding:2px 8px;border-radius:8px;margin-top:4px}
+.movie-card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:12px;margin:8px 0}
+.movie-title{font-size:14px;font-weight:600}
+.movie-title-en{font-size:11px;color:#666}
+.movie-meta{font-size:11px;color:#888;margin-top:4px}
+.party-tag{display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;margin:3px 3px 3px 0;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08)}
+.lang-greeting{font-size:24px;text-align:center;margin:12px 0;padding:16px;background:rgba(255,255,255,.03);border-radius:12px;border:1px solid rgba(255,255,255,.06)}
+.lang-list{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.lang-tag{display:inline-block;padding:4px 10px;border-radius:12px;font-size:12px;background:rgba(52,152,219,.1);border:1px solid rgba(52,152,219,.2);color:#5dade2}
+
+footer{text-align:center;padding:5px;font-size:10px;color:#444;flex-shrink:0}
+
+/* ── Full-page country view ── */
+#country-page{position:fixed;inset:0;z-index:100;background:var(--bg);overflow-y:auto;transform:translateY(100%);opacity:0;transition:transform .5s cubic-bezier(.4,0,.2,1),opacity .4s;pointer-events:none;scroll-behavior:smooth}
+#country-page.open{transform:translateY(0);opacity:1;pointer-events:auto}
+#country-page-close{position:fixed;top:16px;right:16px;z-index:101;background:rgba(15,15,30,.9);border:1px solid rgba(255,255,255,.15);color:#fff;font-size:20px;cursor:pointer;width:44px;height:44px;border-radius:50%;display:none;align-items:center;justify-content:center;backdrop-filter:blur(10px);transition:all .2s}
+#country-page-close:hover{background:rgba(255,255,255,.15);transform:scale(1.1)}
+#country-page.open~#country-page-close{display:flex}
+.cp-header{text-align:center;padding:40px 20px 24px;border-bottom:1px solid var(--border);background:linear-gradient(180deg,rgba(74,144,217,.08),transparent)}
+.cp-flag{font-size:72px;line-height:1;margin-bottom:8px}
+.cp-name{font-size:32px;font-weight:700}
+.cp-name-en{font-size:15px;color:#666;margin-top:4px}
+.cp-basic-info{display:flex;flex-wrap:wrap;justify-content:center;gap:16px;margin-top:16px}
+.cp-basic-item{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:8px 16px;text-align:center}
+.cp-basic-label{font-size:9px;color:#555;text-transform:uppercase;letter-spacing:.5px}
+.cp-basic-value{font-size:14px;font-weight:500;margin-top:2px}
+.cp-nav{position:sticky;top:0;z-index:10;background:rgba(10,10,20,.95);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);display:flex;justify-content:center;gap:4px;padding:10px 16px;flex-wrap:wrap}
+.cp-nav-btn{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);border-radius:8px;padding:6px 14px;font-size:12px;color:#888;cursor:pointer;transition:all .2s;white-space:nowrap;display:flex;align-items:center;gap:4px}
+.cp-nav-btn:hover{background:rgba(255,255,255,.08);color:#ccc}
+.cp-nav-btn.active{background:rgba(74,144,217,.2);color:#fff;border-color:rgba(74,144,217,.4)}
+.cp-content{max-width:900px;margin:0 auto;padding:0 16px 60px}
+.cp-section{padding:32px 0;border-bottom:1px solid var(--border)}
+.cp-section:last-child{border-bottom:none}
+.cp-section-title{font-size:18px;font-weight:600;margin-bottom:20px;display:flex;align-items:center;gap:8px}
+.cp-cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.cp-card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:16px;transition:all .2s}
+.cp-card:hover{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.12)}
+.cp-card-title{font-size:15px;font-weight:600;margin-bottom:4px}
+.cp-card-sub{font-size:11px;color:#666}
+.cp-card-desc{font-size:12px;color:#999;margin-top:6px;line-height:1.5}
+.cp-card-tag{display:inline-block;font-size:10px;padding:2px 8px;border-radius:8px;margin-top:6px;background:rgba(241,196,15,.1);color:#f1c40f}
+.cp-donut-wrap{display:flex;align-items:center;gap:24px;flex-wrap:wrap;justify-content:center}
+.cp-region-map{width:100%;max-width:600px;margin:0 auto;position:relative;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:16px;overflow:hidden}
+.cp-region-map svg{width:100%;display:block}
+.cp-region-marker{cursor:pointer;transition:all .2s}
+.cp-region-marker:hover{filter:brightness(1.5)}
+.cp-region-tooltip{position:absolute;background:rgba(10,10,20,.95);border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:10px 14px;font-size:12px;pointer-events:none;display:none;z-index:5;max-width:200px;backdrop-filter:blur(10px)}
+.cp-info-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.04)}
+.cp-info-row:last-child{border-bottom:none}
+
+@media(max-width:600px){
+  .cp-header{padding:24px 12px 16px}
+  .cp-flag{font-size:48px}
+  .cp-name{font-size:24px}
+  .cp-content{padding:0 12px 40px}
+  .cp-cards-grid{grid-template-columns:1fr}
+  .cp-nav-btn{padding:4px 10px;font-size:11px}
+  #country-page-close{top:10px;right:10px;width:36px;height:36px;font-size:16px}
+}
+
+#lang-switcher{position:absolute;top:6px;left:16px;z-index:10;display:flex;gap:4px}
+#lang-switcher button{background:rgba(15,15,30,.9);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:4px 8px;font-size:16px;cursor:pointer;transition:all .2s;color:#e0e0e0}
+#lang-switcher button:hover{background:rgba(30,30,60,.9);border-color:rgba(255,255,255,.2)}
+#lang-switcher button.active{background:rgba(74,144,217,.3);border-color:rgba(74,144,217,.5)}
+
+@media(max-width:900px){
+  #stats-sidebar{display:none}
+  #stats-toggle{display:none}
+}
+@media(max-width:600px){
+  #legend{bottom:8px;left:6px;padding:8px 10px;font-size:9px;max-width:130px}
+  .legend-icon{font-size:11px;width:14px}
+  .legend-color{width:14px;height:8px}
+  #tooltip{font-size:11px;max-width:200px}
+  #panel{width:100vw;border-left:none}
+  .panel-header{padding:0 16px 16px}
+  .panel-section{padding:14px 16px}
+  .tab-btn{padding:4px 8px;font-size:10px}
+  .tab-icon{font-size:12px}
+  #tabs{gap:1px;padding:2px 4px 0}
+}
+</style>
+</head>
+<body>
+<header>
+<div id="lang-switcher"><button data-lang="ko" class="active">🇰🇷</button><button data-lang="en">🇬🇧</button><button data-lang="ja">🇯🇵</button></div>
+<h1 data-i18n="title">세계 문화 지도 🌍</h1>
+<a href="globe.html" data-i18n="globe3d" style="position:absolute;top:8px;right:16px;z-index:10;background:rgba(15,15,30,.9);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:6px 12px;color:#e0e0e0;font-size:12px;cursor:pointer;backdrop-filter:blur(10px);text-decoration:none;display:inline-flex;align-items:center;gap:4px">🌐 3D 지구본</a>
+</header>
+
+<div id="tabs">
+  <button class="tab-btn active" data-tab="religion" onclick="switchTab('religion')"><span class="tab-icon">🕊️</span><span data-i18n="tab_religion">종교</span></button>
+  <button class="tab-btn" data-tab="food" onclick="switchTab('food')"><span class="tab-icon">🍽️</span><span data-i18n="tab_food">음식</span></button>
+  <button class="tab-btn" data-tab="politics" onclick="switchTab('politics')"><span class="tab-icon">🏛️</span><span data-i18n="tab_politics">정치</span></button>
+  <button class="tab-btn" data-tab="movies" onclick="switchTab('movies')"><span class="tab-icon">🎬</span><span data-i18n="tab_movies">영화</span></button>
+  <button class="tab-btn" data-tab="languages" onclick="switchTab('languages')"><span class="tab-icon">🗣️</span><span data-i18n="tab_languages">언어</span></button>
+  <button class="tab-btn" data-tab="business" onclick="switchTab('business')"><span class="tab-icon">🏢</span><span data-i18n="tab_business">기업</span></button>
+</div>
+
+<div id="main">
+<div id="map-container">
+  <svg id="map">
+    <defs>
+      <pattern id="pat-stripe-catholic" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+        <rect width="6" height="6" fill="var(--catholic)"/>
+        <line x1="0" y1="0" x2="0" y2="6" stroke="rgba(255,255,255,.08)" stroke-width="2"/>
+      </pattern>
+      <pattern id="pat-stripe-protestant" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)">
+        <rect width="6" height="6" fill="var(--protestant)"/>
+        <line x1="0" y1="0" x2="0" y2="6" stroke="rgba(255,255,255,.1)" stroke-width="2"/>
+      </pattern>
+      <pattern id="pat-stripe-orthodox" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(90)">
+        <rect width="6" height="6" fill="var(--orthodox)"/>
+        <line x1="0" y1="0" x2="0" y2="6" stroke="rgba(255,255,255,.1)" stroke-width="2"/>
+      </pattern>
+      <linearGradient id="grad-sunni" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#27ae60"/><stop offset="100%" stop-color="#2ecc71"/>
+      </linearGradient>
+      <linearGradient id="grad-shia" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#145a32"/><stop offset="100%" stop-color="#1a8a4a"/>
+      </linearGradient>
+      <linearGradient id="grad-buddhism" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#d4ac0d"/><stop offset="100%" stop-color="#f1c40f"/>
+      </linearGradient>
+      <linearGradient id="grad-hinduism" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#ca6f1e"/><stop offset="100%" stop-color="#e67e22"/>
+      </linearGradient>
+    </defs>
+  </svg>
+  <div id="tooltip"></div>
+  <div id="legend"></div>
+  <button id="stats-toggle" onclick="toggleStats()">📊</button>
+</div>
+<div id="stats-sidebar"></div>
+</div>
+<div id="panel-overlay" onclick="closePanel()"></div>
+<div id="panel"><div id="panel-close"><button onclick="closePanel()">✕</button></div><div id="panel-content"></div></div>
+<div id="country-page"></div>
+<button id="country-page-close" onclick="closeCountryPage()">✕</button>
+<footer data-i18n="footer">World Culture Map | Data: Various Sources | © 2024</footer>
+
+<script src="data-food.js"></script>
+<script src="data-politics.js"></script>
+<script src="data-movies.js"></script>
+<script src="data-languages.js"></script>
+<script src="data-business.js"></script>
+<script src="data-regions.js"></script>
+<script>
+// ── Current tab ──
+let currentTab = 'religion';
+
+// ── i18n ──
+const i18n={
+  ko:{
+    title:"세계 문화 지도 🌍",globe3d:"🌐 3D 지구본",
+    tab_religion:"종교",tab_food:"음식",tab_politics:"정치",tab_movies:"영화",tab_languages:"언어",
+    legendTitle:"종교 범례",globalStats:"🌐 전 세계 종교 분포",continentStats:"🗺️ 대륙별 종교 분포",
+    globalNote:"세계 인구 약 80억 명 기준 (Pew 2020)",
+    profileTitle:"🏛️ 국가 프로필",religionTitle:"🕊️ 종교 현황",envTitle:"📋 종교 환경",
+    capital:"수도",population:"인구",continent:"대륙",language:"공용어",
+    rfFree:"🟢 종교의 자유 보장",rfPartial:"🟡 부분적 제한",rfRestricted:"🔴 제한적",
+    stateReligion:"🏛️ 국교:",
+    footer:"Data: Various Sources | © 2024",
+    cont_europe:"유럽 🌍",cont_asia:"아시아 🌏",cont_africa:"아프리카 🌍",
+    cont_namerica:"북미 🌎",cont_samerica:"남미 🌎",cont_oceania:"오세아니아 🌊",
+    // Food
+    food_legendTitle:"음식 문화권",food_statsTitle:"🍽️ 세계 음식 문화",food_dishTitle:"🍽️ 대표 음식",food_flavorLabel:"맛 프로필",food_ingredLabel:"주재료/설명",
+    // Politics
+    pol_legendTitle:"정부 형태",pol_statsTitle:"🏛️ 세계 정부 형태 분포",pol_govTitle:"🏛️ 정부 정보",pol_leaderLabel:"국가원수/정부수반",pol_govType:"정부 형태",pol_partiesLabel:"주요 정당",
+    // Movies
+    mov_legendTitle:"영화 산업",mov_statsTitle:"🎬 세계 영화 산업",mov_movieTitle:"🎬 대표 영화",mov_industryLabel:"영화 산업 특징",mov_directorLabel:"감독",
+    // Languages
+    lang_legendTitle:"언어 계통",lang_statsTitle:"🗣️ 세계 언어 분포",lang_langTitle:"🗣️ 언어 정보",lang_officialLabel:"공용어",lang_familyLabel:"어족",lang_greetingLabel:"인사말",lang_otherLangs:"기타 주요 언어",
+    // Business
+    tab_business:"기업",biz_legendTitle:"산업 분류",biz_statsTitle:"🏢 세계 주요 기업",biz_companyTitle:"🏢 대표 기업",biz_industryLabel:"주력 산업",biz_menuLink:"🔗 메뉴 리터러시에서 더 알아보기",biz_movieLink:"🔗 영화 포털에서 더 보기"
+  },
+  en:{
+    title:"World Culture Map 🌍",globe3d:"🌐 3D Globe",
+    tab_religion:"Religion",tab_food:"Food",tab_politics:"Politics",tab_movies:"Movies",tab_languages:"Languages",
+    legendTitle:"Religion Legend",globalStats:"🌐 Global Religion Distribution",continentStats:"🗺️ Distribution by Continent",
+    globalNote:"Based on ~8 billion world population (Pew 2020)",
+    profileTitle:"🏛️ Country Profile",religionTitle:"🕊️ Religion Status",envTitle:"📋 Religious Environment",
+    capital:"Capital",population:"Population",continent:"Continent",language:"Language",
+    rfFree:"🟢 Religious freedom",rfPartial:"🟡 Partial restrictions",rfRestricted:"🔴 Restricted",
+    stateReligion:"🏛️ State religion:",
+    footer:"Data: Various Sources | © 2024",
+    cont_europe:"Europe 🌍",cont_asia:"Asia 🌏",cont_africa:"Africa 🌍",
+    cont_namerica:"N. America 🌎",cont_samerica:"S. America 🌎",cont_oceania:"Oceania 🌊",
+    food_legendTitle:"Cuisine Regions",food_statsTitle:"🍽️ World Cuisines",food_dishTitle:"🍽️ Signature Dishes",food_flavorLabel:"Flavor Profile",food_ingredLabel:"Ingredients/Desc",
+    pol_legendTitle:"Government Types",pol_statsTitle:"🏛️ World Government Types",pol_govTitle:"🏛️ Government Info",pol_leaderLabel:"Head of State/Gov",pol_govType:"Government Type",pol_partiesLabel:"Major Parties",
+    mov_legendTitle:"Film Industries",mov_statsTitle:"🎬 World Cinema",mov_movieTitle:"🎬 Notable Films",mov_industryLabel:"Film Industry",mov_directorLabel:"Director",
+    lang_legendTitle:"Language Families",lang_statsTitle:"🗣️ World Languages",lang_langTitle:"🗣️ Language Info",lang_officialLabel:"Official Language",lang_familyLabel:"Language Family",lang_greetingLabel:"Greeting",lang_otherLangs:"Other Major Languages",
+    tab_business:"Business",biz_legendTitle:"Industry Classification",biz_statsTitle:"🏢 Global Business Leaders",biz_companyTitle:"🏢 Leading Companies",biz_industryLabel:"Core Industry",biz_menuLink:"🔗 Explore more on Menu Literacy",biz_movieLink:"🔗 Explore more on Movie Portal"
+  },
+  ja:{
+    title:"世界文化地図 🌍",globe3d:"🌐 3D 地球儀",
+    tab_religion:"宗教",tab_food:"料理",tab_politics:"政治",tab_movies:"映画",tab_languages:"言語",
+    legendTitle:"宗教凡例",globalStats:"🌐 世界の宗教分布",continentStats:"🗺️ 大陸別宗教分布",
+    globalNote:"世界人口約80億人基準 (Pew 2020)",
+    profileTitle:"🏛️ 国家プロフィール",religionTitle:"🕊️ 宗教現況",envTitle:"📋 宗教環境",
+    capital:"首都",population:"人口",continent:"大陸",language:"公用語",
+    rfFree:"🟢 信教の自由保障",rfPartial:"🟡 部分的制限",rfRestricted:"🔴 制限的",
+    stateReligion:"🏛️ 国教:",
+    footer:"Data: Various Sources | © 2024",
+    cont_europe:"ヨーロッパ 🌍",cont_asia:"アジア 🌏",cont_africa:"アフリカ 🌍",
+    cont_namerica:"北米 🌎",cont_samerica:"南米 🌎",cont_oceania:"オセアニア 🌊",
+    food_legendTitle:"料理文化圏",food_statsTitle:"🍽️ 世界の料理",food_dishTitle:"🍽️ 代表料理",food_flavorLabel:"味のプロフィール",food_ingredLabel:"材料/説明",
+    pol_legendTitle:"政府の形態",pol_statsTitle:"🏛️ 世界の政府形態",pol_govTitle:"🏛️ 政府情報",pol_leaderLabel:"国家元首/政府首班",pol_govType:"政府形態",pol_partiesLabel:"主要政党",
+    mov_legendTitle:"映画産業",mov_statsTitle:"🎬 世界の映画",mov_movieTitle:"🎬 代表映画",mov_industryLabel:"映画産業の特徴",mov_directorLabel:"監督",
+    lang_legendTitle:"言語系統",lang_statsTitle:"🗣️ 世界の言語",lang_langTitle:"🗣️ 言語情報",lang_officialLabel:"公用語",lang_familyLabel:"語族",lang_greetingLabel:"挨拶",lang_otherLangs:"その他の主要言語",
+    tab_business:"企業",biz_legendTitle:"産業分類",biz_statsTitle:"🏢 世界の主要企業",biz_companyTitle:"🏢 代表企業",biz_industryLabel:"主力産業",biz_menuLink:"🔗 メニューリテラシーで詳しく見る",biz_movieLink:"🔗 映画ポータルで詳しく見る"
+  }
+};
+let currentLang=localStorage.getItem('religion-map-lang')||'ko';
+function t(key){return (i18n[currentLang]&&i18n[currentLang][key])||i18n.ko[key]||key;}
+
+// ── Religion metadata ──
+const RELIGIONS={
+  "가톨릭":{c:"#4a90d9",icon:"✝️",fill:"url(#pat-stripe-catholic)",en:"Catholic",ja:"カトリック"},
+  "개신교":{c:"#6ec6ff",icon:"✝️",fill:"url(#pat-stripe-protestant)",en:"Protestant",ja:"プロテスタント"},
+  "정교회":{c:"#1e3a5f",icon:"☦️",fill:"url(#pat-stripe-orthodox)",en:"Orthodox",ja:"正教会"},
+  "수니파 이슬람":{c:"#2ecc71",icon:"☪️",fill:"url(#grad-sunni)",en:"Sunni Islam",ja:"スンニ派"},
+  "시아파 이슬람":{c:"#1a8a4a",icon:"☪️",fill:"url(#grad-shia)",en:"Shia Islam",ja:"シーア派"},
+  "이바디 이슬람":{c:"#0d6b3a",icon:"☪️",fill:"#0d6b3a",en:"Ibadi Islam",ja:"イバード派"},
+  "불교":{c:"#f1c40f",icon:"☸️",fill:"url(#grad-buddhism)",en:"Buddhism",ja:"仏教"},
+  "힌두교":{c:"#e67e22",icon:"🕉️",fill:"url(#grad-hinduism)",en:"Hinduism",ja:"ヒンドゥー教"},
+  "유대교":{c:"#9b59b6",icon:"✡️",fill:"#9b59b6",en:"Judaism",ja:"ユダヤ教"},
+  "무종교":{c:"#95a5a6",icon:"⚛️",fill:"#95a5a6",en:"Non-religious",ja:"無宗教"},
+  "전통종교":{c:"#e74c3c",icon:"🌿",fill:"#e74c3c",en:"Traditional",ja:"伝統宗教"},
+  "기타":{c:"#7f8c8d",icon:"🔵",fill:"#7f8c8d",en:"Other",ja:"その他"}
+};
+function rc(n){return RELIGIONS[n]||RELIGIONS["기타"];}
+function rn(n){const r=RELIGIONS[n];if(!r)return n;if(currentLang==='ko')return n;return r[currentLang]||r.en||n;}
+
+// ── Legend builder (per tab) ──
+function buildLegend(){
+  const leg=document.getElementById('legend');
+  if(currentTab==='religion'){
+    leg.innerHTML='<h3>'+t('legendTitle')+'</h3>'+Object.entries(RELIGIONS).map(([k,v])=>
+      `<div class="legend-item"><span class="legend-icon">${v.icon}</span><div class="legend-color" style="background:${v.c}"></div>${rn(k)}</div>`
+    ).join('');
+  } else if(currentTab==='food'){
+    leg.innerHTML='<h3>'+t('food_legendTitle')+'</h3>'+Object.entries(FOOD_REGIONS).map(([k,v])=>{
+      const label = currentLang==='en'? k : k;
+      return `<div class="legend-item"><div class="legend-color" style="background:${v.c}"></div>${label}</div>`;
+    }).join('');
+  } else if(currentTab==='politics'){
+    leg.innerHTML='<h3>'+t('pol_legendTitle')+'</h3>'+Object.entries(GOV_TYPES).map(([k,v])=>{
+      const label = currentLang==='ko'?k:(currentLang==='ja'?v.ja:v.en);
+      return `<div class="legend-item"><span class="legend-icon">${v.icon}</span><div class="legend-color" style="background:${v.c}"></div>${label}</div>`;
+    }).join('');
+  } else if(currentTab==='movies'){
+    leg.innerHTML='<h3>'+t('mov_legendTitle')+'</h3>'+Object.entries(MOVIE_INDUSTRY).map(([k,v])=>{
+      const label = currentLang==='ko'?k:(currentLang==='ja'?v.ja:v.en);
+      return `<div class="legend-item"><div class="legend-color" style="background:${v.c}"></div>${label}</div>`;
+    }).join('');
+  } else if(currentTab==='languages'){
+    leg.innerHTML='<h3>'+t('lang_legendTitle')+'</h3>'+Object.entries(LANG_FAMILIES).filter(([k])=>['인도유럽어족','시노티베탄어족','아프로아시아어족','니제르콩고어족','오스트로네시아어족','튀르크어족','우랄어족','타이카다이어족','한국어족','일본어족'].includes(k)).map(([k,v])=>{
+      const label = currentLang==='ko'?k:(currentLang==='ja'?v.ja:v.en);
+      return `<div class="legend-item"><span class="legend-icon">${v.icon}</span><div class="legend-color" style="background:${v.c}"></div>${label}</div>`;
+    }).join('');
+  } else if(currentTab==='business'){
+    leg.innerHTML='<h3>'+t('biz_legendTitle')+'</h3>'+Object.entries(BIZ_INDUSTRIES).map(([k,v])=>{
+      const label = currentLang==='ko'?k:(currentLang==='ja'?v.ja:v.en);
+      return `<div class="legend-item"><span class="legend-icon">${v.icon}</span><div class="legend-color" style="background:${v.c}"></div>${label}</div>`;
+    }).join('');
+  }
+}
+
+// ── Country data (religion %) ──
+const DATA={
+"AFG":{n:"아프가니스탄",r:[{n:"수니파 이슬람",p:84.7},{n:"시아파 이슬람",p:15}]},
+"ALB":{n:"알바니아",r:[{n:"수니파 이슬람",p:56.7},{n:"가톨릭",p:10},{n:"정교회",p:6.8}]},
+"DZA":{n:"알제리",r:[{n:"수니파 이슬람",p:99}]},
+"AGO":{n:"앙골라",r:[{n:"가톨릭",p:41},{n:"개신교",p:38}]},
+"ARG":{n:"아르헨티나",r:[{n:"가톨릭",p:62.9},{n:"개신교",p:15.3},{n:"무종교",p:18.9}]},
+"ARM":{n:"아르메니아",r:[{n:"정교회",p:92.6}]},
+"AUS":{n:"호주",r:[{n:"무종교",p:38.9},{n:"가톨릭",p:20},{n:"개신교",p:18}]},
+"AUT":{n:"오스트리아",r:[{n:"가톨릭",p:55.2},{n:"무종교",p:30},{n:"수니파 이슬람",p:8}]},
+"AZE":{n:"아제르바이잔",r:[{n:"시아파 이슬람",p:65},{n:"수니파 이슬람",p:26}]},
+"BHS":{n:"바하마",r:[{n:"개신교",p:69.9},{n:"가톨릭",p:12}]},
+"BHR":{n:"바레인",r:[{n:"시아파 이슬람",p:46},{n:"수니파 이슬람",p:32}]},
+"BGD":{n:"방글라데시",r:[{n:"수니파 이슬람",p:89.1},{n:"힌두교",p:10}]},
+"BRB":{n:"바베이도스",r:[{n:"개신교",p:66},{n:"가톨릭",p:4}]},
+"BLR":{n:"벨라루스",r:[{n:"정교회",p:48.3},{n:"가톨릭",p:7.1},{n:"무종교",p:41}]},
+"BEL":{n:"벨기에",r:[{n:"가톨릭",p:52},{n:"무종교",p:35}]},
+"BLZ":{n:"벨리즈",r:[{n:"가톨릭",p:40.1},{n:"개신교",p:31.5}]},
+"BEN":{n:"베냉",r:[{n:"가톨릭",p:27.1},{n:"수니파 이슬람",p:24.4},{n:"전통종교",p:17.3}]},
+"BTN":{n:"부탄",r:[{n:"불교",p:74.8},{n:"힌두교",p:22.6}]},
+"BOL":{n:"볼리비아",r:[{n:"가톨릭",p:70},{n:"개신교",p:17}]},
+"BIH":{n:"보스니아",r:[{n:"수니파 이슬람",p:50.7},{n:"정교회",p:30.7},{n:"가톨릭",p:15.2}]},
+"BWA":{n:"보츠와나",r:[{n:"개신교",p:79.1}]},
+"BRA":{n:"브라질",r:[{n:"가톨릭",p:64.6},{n:"개신교",p:22.2},{n:"무종교",p:8}]},
+"BRN":{n:"브루나이",r:[{n:"수니파 이슬람",p:78.8},{n:"불교",p:8.7}]},
+"BGR":{n:"불가리아",r:[{n:"정교회",p:59.4},{n:"수니파 이슬람",p:7.8},{n:"무종교",p:30}]},
+"BFA":{n:"부르키나파소",r:[{n:"수니파 이슬람",p:61.5},{n:"가톨릭",p:23.2},{n:"전통종교",p:7.8}]},
+"BDI":{n:"부룬디",r:[{n:"가톨릭",p:62.1},{n:"개신교",p:23.9}]},
+"KHM":{n:"캄보디아",r:[{n:"불교",p:96.9}]},
+"CMR":{n:"카메룬",r:[{n:"가톨릭",p:38.4},{n:"개신교",p:26.3},{n:"수니파 이슬람",p:20.9}]},
+"CAN":{n:"캐나다",r:[{n:"가톨릭",p:29},{n:"개신교",p:18},{n:"무종교",p:34.6}]},
+"CPV":{n:"카보베르데",r:[{n:"가톨릭",p:77.3}]},
+"CAF":{n:"중앙아프리카",r:[{n:"개신교",p:51},{n:"가톨릭",p:29},{n:"수니파 이슬람",p:15}]},
+"TCD":{n:"차드",r:[{n:"수니파 이슬람",p:52.1},{n:"가톨릭",p:20.1},{n:"개신교",p:14.2}]},
+"CHL":{n:"칠레",r:[{n:"가톨릭",p:55},{n:"개신교",p:16},{n:"무종교",p:25}]},
+"CHN":{n:"중국",r:[{n:"무종교",p:73.6},{n:"전통종교",p:15},{n:"불교",p:6}]},
+"COL":{n:"콜롬비아",r:[{n:"가톨릭",p:73},{n:"개신교",p:16.7}]},
+"COM":{n:"코모로",r:[{n:"수니파 이슬람",p:98}]},
+"COG":{n:"콩고",r:[{n:"가톨릭",p:33.1},{n:"개신교",p:22.3}]},
+"COD":{n:"콩고민주공화국",r:[{n:"가톨릭",p:29.9},{n:"개신교",p:26.8}]},
+"CRI":{n:"코스타리카",r:[{n:"가톨릭",p:52},{n:"개신교",p:25}]},
+"CIV":{n:"코트디부아르",r:[{n:"수니파 이슬람",p:42.9},{n:"가톨릭",p:17.2},{n:"개신교",p:11.8}]},
+"HRV":{n:"크로아티아",r:[{n:"가톨릭",p:86.3}]},
+"CUB":{n:"쿠바",r:[{n:"가톨릭",p:60},{n:"무종교",p:23}]},
+"CYP":{n:"키프로스",r:[{n:"정교회",p:72},{n:"수니파 이슬람",p:25.4}]},
+"CZE":{n:"체코",r:[{n:"무종교",p:72},{n:"가톨릭",p:10.4}]},
+"DNK":{n:"덴마크",r:[{n:"개신교",p:74.7},{n:"무종교",p:19}]},
+"DJI":{n:"지부티",r:[{n:"수니파 이슬람",p:94}]},
+"DOM":{n:"도미니카공화국",r:[{n:"가톨릭",p:47.8},{n:"개신교",p:21.3}]},
+"ECU":{n:"에콰도르",r:[{n:"가톨릭",p:74},{n:"개신교",p:11}]},
+"EGY":{n:"이집트",r:[{n:"수니파 이슬람",p:90},{n:"정교회",p:10}]},
+"SLV":{n:"엘살바도르",r:[{n:"가톨릭",p:50},{n:"개신교",p:36}]},
+"GNQ":{n:"적도기니",r:[{n:"가톨릭",p:88}]},
+"ERI":{n:"에리트레아",r:[{n:"정교회",p:50},{n:"수니파 이슬람",p:36.5},{n:"가톨릭",p:13}]},
+"EST":{n:"에스토니아",r:[{n:"무종교",p:64},{n:"개신교",p:10},{n:"정교회",p:16}]},
+"SWZ":{n:"에스와티니",r:[{n:"개신교",p:40},{n:"가톨릭",p:20}]},
+"ETH":{n:"에티오피아",r:[{n:"정교회",p:43.5},{n:"수니파 이슬람",p:33.9},{n:"개신교",p:18.5}]},
+"FJI":{n:"피지",r:[{n:"개신교",p:45},{n:"힌두교",p:27.9},{n:"가톨릭",p:9}]},
+"FIN":{n:"핀란드",r:[{n:"개신교",p:66.6},{n:"무종교",p:29}]},
+"FRA":{n:"프랑스",r:[{n:"가톨릭",p:47},{n:"무종교",p:40},{n:"수니파 이슬람",p:8}]},
+"GAB":{n:"가봉",r:[{n:"가톨릭",p:42.3},{n:"개신교",p:12.3},{n:"수니파 이슬람",p:9.8}]},
+"GMB":{n:"감비아",r:[{n:"수니파 이슬람",p:95.7}]},
+"GEO":{n:"조지아",r:[{n:"정교회",p:83.4},{n:"수니파 이슬람",p:10.7}]},
+"DEU":{n:"독일",r:[{n:"가톨릭",p:26},{n:"개신교",p:23.7},{n:"무종교",p:40},{n:"수니파 이슬람",p:6}]},
+"GHA":{n:"가나",r:[{n:"개신교",p:47.8},{n:"가톨릭",p:13.1},{n:"수니파 이슬람",p:17.6}]},
+"GRC":{n:"그리스",r:[{n:"정교회",p:81}]},
+"GTM":{n:"과테말라",r:[{n:"가톨릭",p:41.7},{n:"개신교",p:38.2}]},
+"GIN":{n:"기니",r:[{n:"수니파 이슬람",p:89.1}]},
+"GNB":{n:"기니비사우",r:[{n:"수니파 이슬람",p:45.1},{n:"전통종교",p:30.9},{n:"가톨릭",p:22}]},
+"GUY":{n:"가이아나",r:[{n:"개신교",p:34.8},{n:"힌두교",p:24.8},{n:"가톨릭",p:7.1}]},
+"HTI":{n:"아이티",r:[{n:"가톨릭",p:54.7},{n:"개신교",p:28.5}]},
+"HND":{n:"온두라스",r:[{n:"가톨릭",p:46},{n:"개신교",p:41}]},
+"HUN":{n:"헝가리",r:[{n:"가톨릭",p:37.2},{n:"개신교",p:11.6},{n:"무종교",p:45}]},
+"ISL":{n:"아이슬란드",r:[{n:"개신교",p:62.3},{n:"무종교",p:26}]},
+"IND":{n:"인도",r:[{n:"힌두교",p:79.8},{n:"수니파 이슬람",p:14.2},{n:"기타",p:6}]},
+"IDN":{n:"인도네시아",r:[{n:"수니파 이슬람",p:87.2},{n:"개신교",p:7},{n:"가톨릭",p:2.9}]},
+"IRN":{n:"이란",r:[{n:"시아파 이슬람",p:90},{n:"수니파 이슬람",p:8}]},
+"IRQ":{n:"이라크",r:[{n:"시아파 이슬람",p:55},{n:"수니파 이슬람",p:40}]},
+"IRL":{n:"아일랜드",r:[{n:"가톨릭",p:69.2},{n:"무종교",p:14}]},
+"ISR":{n:"이스라엘",r:[{n:"유대교",p:74.2},{n:"수니파 이슬람",p:17.8}]},
+"ITA":{n:"이탈리아",r:[{n:"가톨릭",p:71.1},{n:"무종교",p:20}]},
+"JAM":{n:"자메이카",r:[{n:"개신교",p:64.8},{n:"가톨릭",p:2.2}]},
+"JPN":{n:"일본",r:[{n:"무종교",p:57},{n:"불교",p:36.2}]},
+"JOR":{n:"요르단",r:[{n:"수니파 이슬람",p:95}]},
+"KAZ":{n:"카자흐스탄",r:[{n:"수니파 이슬람",p:70.2},{n:"정교회",p:23.9}]},
+"KEN":{n:"케냐",r:[{n:"개신교",p:47.7},{n:"가톨릭",p:23.4},{n:"수니파 이슬람",p:11.2}]},
+"PRK":{n:"북한",r:[{n:"무종교",p:71.3},{n:"전통종교",p:12.3}]},
+"KOR":{n:"대한민국",r:[{n:"무종교",p:56.1},{n:"개신교",p:19.7},{n:"불교",p:15.5},{n:"가톨릭",p:7.9}]},
+"KWT":{n:"쿠웨이트",r:[{n:"수니파 이슬람",p:60},{n:"시아파 이슬람",p:15}]},
+"KGZ":{n:"키르기스스탄",r:[{n:"수니파 이슬람",p:75},{n:"정교회",p:20}]},
+"LAO":{n:"라오스",r:[{n:"불교",p:64.7},{n:"전통종교",p:30.7}]},
+"LVA":{n:"라트비아",r:[{n:"가톨릭",p:18},{n:"개신교",p:17},{n:"정교회",p:15},{n:"무종교",p:45}]},
+"LBN":{n:"레바논",r:[{n:"수니파 이슬람",p:31.9},{n:"시아파 이슬람",p:31.2},{n:"가톨릭",p:21}]},
+"LSO":{n:"레소토",r:[{n:"가톨릭",p:44.1},{n:"개신교",p:47.8}]},
+"LBR":{n:"라이베리아",r:[{n:"개신교",p:85.6},{n:"수니파 이슬람",p:12.2}]},
+"LBY":{n:"리비아",r:[{n:"수니파 이슬람",p:96.6}]},
+"LTU":{n:"리투아니아",r:[{n:"가톨릭",p:77}]},
+"LUX":{n:"룩셈부르크",r:[{n:"가톨릭",p:60.8},{n:"무종교",p:26}]},
+"MDG":{n:"마다가스카르",r:[{n:"가톨릭",p:34},{n:"개신교",p:26},{n:"전통종교",p:25}]},
+"MWI":{n:"말라위",r:[{n:"개신교",p:33},{n:"가톨릭",p:17.2},{n:"수니파 이슬람",p:13.8}]},
+"MYS":{n:"말레이시아",r:[{n:"수니파 이슬람",p:61.3},{n:"불교",p:19.8},{n:"힌두교",p:6.3}]},
+"MDV":{n:"몰디브",r:[{n:"수니파 이슬람",p:98.4}]},
+"MLI":{n:"말리",r:[{n:"수니파 이슬람",p:94.8}]},
+"MLT":{n:"몰타",r:[{n:"가톨릭",p:82}]},
+"MRT":{n:"모리타니",r:[{n:"수니파 이슬람",p:100}]},
+"MUS":{n:"모리셔스",r:[{n:"힌두교",p:48.5},{n:"가톨릭",p:26.3},{n:"수니파 이슬람",p:17.3}]},
+"MEX":{n:"멕시코",r:[{n:"가톨릭",p:77.7},{n:"개신교",p:11.2}]},
+"MDA":{n:"몰도바",r:[{n:"정교회",p:90.1}]},
+"MNG":{n:"몽골",r:[{n:"불교",p:53},{n:"무종교",p:38.6}]},
+"MNE":{n:"몬테네그로",r:[{n:"정교회",p:72.1},{n:"수니파 이슬람",p:19.1}]},
+"MAR":{n:"모로코",r:[{n:"수니파 이슬람",p:99}]},
+"MOZ":{n:"모잠비크",r:[{n:"가톨릭",p:27.2},{n:"수니파 이슬람",p:18.9},{n:"개신교",p:17.2}]},
+"MMR":{n:"미얀마",r:[{n:"불교",p:87.9},{n:"수니파 이슬람",p:4.3}]},
+"NAM":{n:"나미비아",r:[{n:"개신교",p:50},{n:"가톨릭",p:20}]},
+"NPL":{n:"네팔",r:[{n:"힌두교",p:81.3},{n:"불교",p:9}]},
+"NLD":{n:"네덜란드",r:[{n:"무종교",p:50.1},{n:"가톨릭",p:20.1},{n:"개신교",p:14.8}]},
+"NZL":{n:"뉴질랜드",r:[{n:"무종교",p:48.6},{n:"가톨릭",p:10},{n:"개신교",p:20}]},
+"NIC":{n:"니카라과",r:[{n:"가톨릭",p:50},{n:"개신교",p:33.2}]},
+"NER":{n:"니제르",r:[{n:"수니파 이슬람",p:99.3}]},
+"NGA":{n:"나이지리아",r:[{n:"수니파 이슬람",p:50},{n:"개신교",p:25.3},{n:"가톨릭",p:14.5}]},
+"MKD":{n:"북마케도니아",r:[{n:"정교회",p:64.8},{n:"수니파 이슬람",p:33.3}]},
+"NOR":{n:"노르웨이",r:[{n:"개신교",p:68.7},{n:"무종교",p:20}]},
+"OMN":{n:"오만",r:[{n:"이바디 이슬람",p:45},{n:"수니파 이슬람",p:27},{n:"시아파 이슬람",p:5}]},
+"PAK":{n:"파키스탄",r:[{n:"수니파 이슬람",p:82},{n:"시아파 이슬람",p:15}]},
+"PAN":{n:"파나마",r:[{n:"가톨릭",p:63.2},{n:"개신교",p:25}]},
+"PNG":{n:"파푸아뉴기니",r:[{n:"개신교",p:64},{n:"가톨릭",p:27}]},
+"PRY":{n:"파라과이",r:[{n:"가톨릭",p:89.6},{n:"개신교",p:6.2}]},
+"PER":{n:"페루",r:[{n:"가톨릭",p:76},{n:"개신교",p:14.1}]},
+"PHL":{n:"필리핀",r:[{n:"가톨릭",p:78.8},{n:"수니파 이슬람",p:6.4},{n:"개신교",p:5}]},
+"POL":{n:"폴란드",r:[{n:"가톨릭",p:85.4}]},
+"PRT":{n:"포르투갈",r:[{n:"가톨릭",p:81},{n:"무종교",p:12}]},
+"QAT":{n:"카타르",r:[{n:"수니파 이슬람",p:65.5},{n:"힌두교",p:15.1}]},
+"ROU":{n:"루마니아",r:[{n:"정교회",p:81.9},{n:"가톨릭",p:4.3},{n:"개신교",p:6.2}]},
+"RUS":{n:"러시아",r:[{n:"정교회",p:71},{n:"수니파 이슬람",p:10},{n:"무종교",p:15}]},
+"RWA":{n:"르완다",r:[{n:"가톨릭",p:43.7},{n:"개신교",p:37.7}]},
+"SAU":{n:"사우디아라비아",r:[{n:"수니파 이슬람",p:85},{n:"시아파 이슬람",p:12}]},
+"SEN":{n:"세네갈",r:[{n:"수니파 이슬람",p:96.1}]},
+"SRB":{n:"세르비아",r:[{n:"정교회",p:84.6}]},
+"SLE":{n:"시에라리온",r:[{n:"수니파 이슬람",p:78.6},{n:"개신교",p:20.8}]},
+"SGP":{n:"싱가포르",r:[{n:"불교",p:31.1},{n:"무종교",p:20},{n:"수니파 이슬람",p:15.6},{n:"힌두교",p:5}]},
+"SVK":{n:"슬로바키아",r:[{n:"가톨릭",p:55.8},{n:"무종교",p:30},{n:"개신교",p:5.3}]},
+"SVN":{n:"슬로베니아",r:[{n:"가톨릭",p:57.8},{n:"무종교",p:35}]},
+"SLB":{n:"솔로몬제도",r:[{n:"개신교",p:73},{n:"가톨릭",p:19}]},
+"SOM":{n:"소말리아",r:[{n:"수니파 이슬람",p:99.8}]},
+"ZAF":{n:"남아프리카",r:[{n:"개신교",p:36.6},{n:"가톨릭",p:7.1},{n:"기타",p:36}]},
+"SSD":{n:"남수단",r:[{n:"가톨릭",p:37.2},{n:"개신교",p:26.6},{n:"전통종교",p:30}]},
+"ESP":{n:"스페인",r:[{n:"가톨릭",p:58.2},{n:"무종교",p:35}]},
+"LKA":{n:"스리랑카",r:[{n:"불교",p:70.2},{n:"힌두교",p:12.6},{n:"수니파 이슬람",p:9.7}]},
+"SDN":{n:"수단",r:[{n:"수니파 이슬람",p:90.7}]},
+"SUR":{n:"수리남",r:[{n:"개신교",p:23.6},{n:"힌두교",p:22.3},{n:"가톨릭",p:21.6}]},
+"SWE":{n:"스웨덴",r:[{n:"개신교",p:57.7},{n:"무종교",p:34}]},
+"CHE":{n:"스위스",r:[{n:"가톨릭",p:34.4},{n:"개신교",p:22.5},{n:"무종교",p:32}]},
+"SYR":{n:"시리아",r:[{n:"수니파 이슬람",p:74},{n:"기타",p:13},{n:"정교회",p:10}]},
+"TWN":{n:"대만",r:[{n:"불교",p:35.1},{n:"전통종교",p:33},{n:"무종교",p:18.7}]},
+"TJK":{n:"타지키스탄",r:[{n:"수니파 이슬람",p:96.7}]},
+"TZA":{n:"탄자니아",r:[{n:"가톨릭",p:31.3},{n:"수니파 이슬람",p:35.2},{n:"개신교",p:27.1}]},
+"THA":{n:"태국",r:[{n:"불교",p:93.6},{n:"수니파 이슬람",p:5.4}]},
+"TLS":{n:"동티모르",r:[{n:"가톨릭",p:97.6}]},
+"TGO":{n:"토고",r:[{n:"전통종교",p:33.7},{n:"가톨릭",p:27.7},{n:"수니파 이슬람",p:20}]},
+"TTO":{n:"트리니다드토바고",r:[{n:"가톨릭",p:21.6},{n:"힌두교",p:18.2},{n:"개신교",p:32.1}]},
+"TUN":{n:"튀니지",r:[{n:"수니파 이슬람",p:99.1}]},
+"TUR":{n:"튀르키예",r:[{n:"수니파 이슬람",p:82},{n:"기타",p:15}]},
+"TKM":{n:"투르크메니스탄",r:[{n:"수니파 이슬람",p:89},{n:"정교회",p:9}]},
+"UGA":{n:"우간다",r:[{n:"가톨릭",p:39.3},{n:"개신교",p:32},{n:"수니파 이슬람",p:13.7}]},
+"UKR":{n:"우크라이나",r:[{n:"정교회",p:67.3},{n:"가톨릭",p:9.4},{n:"무종교",p:19}]},
+"ARE":{n:"아랍에미리트",r:[{n:"수니파 이슬람",p:63},{n:"시아파 이슬람",p:13},{n:"힌두교",p:10}]},
+"GBR":{n:"영국",r:[{n:"개신교",p:27},{n:"무종교",p:52},{n:"가톨릭",p:8.7},{n:"수니파 이슬람",p:6.5}]},
+"USA":{n:"미국",r:[{n:"개신교",p:42},{n:"가톨릭",p:21},{n:"무종교",p:26}]},
+"URY":{n:"우루과이",r:[{n:"가톨릭",p:42},{n:"무종교",p:41}]},
+"UZB":{n:"우즈베키스탄",r:[{n:"수니파 이슬람",p:88},{n:"정교회",p:9}]},
+"VUT":{n:"바누아투",r:[{n:"개신교",p:70},{n:"가톨릭",p:12.4}]},
+"VEN":{n:"베네수엘라",r:[{n:"가톨릭",p:71},{n:"개신교",p:17}]},
+"VNM":{n:"베트남",r:[{n:"무종교",p:45.3},{n:"불교",p:16.4},{n:"전통종교",p:29.6}]},
+"YEM":{n:"예멘",r:[{n:"수니파 이슬람",p:65},{n:"시아파 이슬람",p:34}]},
+"ZMB":{n:"잠비아",r:[{n:"개신교",p:75.3},{n:"가톨릭",p:20.2}]},
+"ZWE":{n:"짐바브웨",r:[{n:"개신교",p:69.2},{n:"가톨릭",p:7.5}]},
+"PSE":{n:"팔레스타인",r:[{n:"수니파 이슬람",p:93},{n:"기타",p:7}]},
+"XKX":{n:"코소보",r:[{n:"수니파 이슬람",p:95.6}]},
+"GRL":{n:"그린란드",r:[{n:"개신교",p:95}]},
+"NCL":{n:"뉴칼레도니아",r:[{n:"가톨릭",p:60}]},
+"FSM":{n:"미크로네시아",r:[{n:"가톨릭",p:54.7},{n:"개신교",p:41.1}]},
+"WSM":{n:"사모아",r:[{n:"개신교",p:52.6},{n:"가톨릭",p:18.8}]},
+"TON":{n:"통가",r:[{n:"개신교",p:64},{n:"가톨릭",p:15.6}]},
+"KIR":{n:"키리바시",r:[{n:"가톨릭",p:55.8},{n:"개신교",p:33.5}]}
+};
+
+// ── Extended country profiles ──
+const PROFILE={
+"AFG":{e:"Afghanistan",f:"🇦🇫",c:"카불",p:"4,100만",g:"아시아",l:"파슈토어, 다리어",rf:"restricted",sr:"이슬람",desc:"이슬람이 헌법상 국교이며, 탈레반 통치 하에 엄격한 샤리아법이 적용됩니다."},
+"ALB":{e:"Albania",f:"🇦🇱",c:"티라나",p:"290만",g:"유럽",l:"알바니아어",rf:"free",desc:"유럽에서 무슬림 다수 국가 중 하나로, 종교 간 공존이 잘 이루어지는 세속 국가입니다."},
+"DZA":{e:"Algeria",f:"🇩🇿",c:"알제",p:"4,500만",g:"아프리카",l:"아랍어, 베르베르어",rf:"partial",sr:"이슬람",desc:"이슬람이 국교이며, 비무슬림 선교 활동이 제한됩니다."},
+"AGO":{e:"Angola",f:"🇦🇴",c:"루안다",p:"3,500만",g:"아프리카",l:"포르투갈어",rf:"free",desc:"포르투갈 식민 영향으로 가톨릭이 주류이며, 최근 개신교가 빠르게 성장 중입니다."},
+"ARG":{e:"Argentina",f:"🇦🇷",c:"부에노스아이레스",p:"4,600만",g:"남미",l:"스페인어",rf:"free",sr:"가톨릭(지원)",desc:"프란치스코 교황의 고국."},
+"ARM":{e:"Armenia",f:"🇦🇲",c:"예레반",p:"300만",g:"유럽",l:"아르메니아어",rf:"partial",sr:"아르메니아 사도교회",desc:"세계 최초로 기독교를 국교로 채택한(301년) 국가입니다."},
+"AUS":{e:"Australia",f:"🇦🇺",c:"캔버라",p:"2,600만",g:"오세아니아",l:"영어",rf:"free",desc:"세속 국가로, 최근 '무종교' 응답이 최대 비율을 차지했습니다."},
+"AUT":{e:"Austria",f:"🇦🇹",c:"빈",p:"910만",g:"유럽",l:"독일어",rf:"free",desc:"역사적으로 가톨릭 전통이 강합니다."},
+"AZE":{e:"Azerbaijan",f:"🇦🇿",c:"바쿠",p:"1,030만",g:"아시아",l:"아제르바이잔어",rf:"partial",desc:"시아파 무슬림 다수이나 세속주의를 표방합니다."},
+"BGD":{e:"Bangladesh",f:"🇧🇩",c:"다카",p:"1억 7,000만",g:"아시아",l:"벵골어",rf:"partial",sr:"이슬람",desc:"이슬람이 국교이며, 힌두교 소수 공동체가 공존합니다."},
+"BLR":{e:"Belarus",f:"🇧🇾",c:"민스크",p:"930만",g:"유럽",l:"벨라루스어, 러시아어",rf:"partial",desc:"정교회가 전통적 주류입니다."},
+"BEL":{e:"Belgium",f:"🇧🇪",c:"브뤼셀",p:"1,160만",g:"유럽",l:"네덜란드어, 프랑스어, 독일어",rf:"free",desc:"가톨릭 전통이 강하지만 세속화가 진행 중입니다."},
+"BTN":{e:"Bhutan",f:"🇧🇹",c:"팀푸",p:"78만",g:"아시아",l:"종카어",rf:"partial",sr:"불교(바즈라야나)",desc:"바즈라야나 불교가 국교입니다."},
+"BOL":{e:"Bolivia",f:"🇧🇴",c:"수크레/라파스",p:"1,200만",g:"남미",l:"스페인어 외",rf:"free",desc:"가톨릭이 주류이며 원주민 전통 신앙과 혼합됩니다."},
+"BIH":{e:"Bosnia and Herzegovina",f:"🇧🇦",c:"사라예보",p:"320만",g:"유럽",l:"보스니아어 외",rf:"free",desc:"이슬람·정교회·가톨릭이 민족별로 나뉘어 공존합니다."},
+"BRA":{e:"Brazil",f:"🇧🇷",c:"브라질리아",p:"2억 1,500만",g:"남미",l:"포르투갈어",rf:"free",desc:"세계 최대 가톨릭 인구 보유국입니다."},
+"BRN":{e:"Brunei",f:"🇧🇳",c:"반다르스리브가완",p:"45만",g:"아시아",l:"말레이어",rf:"restricted",sr:"이슬람",desc:"이슬람이 국교이며 샤리아 형법이 시행됩니다."},
+"BGR":{e:"Bulgaria",f:"🇧🇬",c:"소피아",p:"640만",g:"유럽",l:"불가리아어",rf:"free",sr:"정교회(전통적)",desc:"불가리아 정교회가 헌법상 전통 종교입니다."},
+"KHM":{e:"Cambodia",f:"🇰🇭",c:"프놈펜",p:"1,700만",g:"아시아",l:"크메르어",rf:"partial",sr:"불교",desc:"상좌부 불교가 국교입니다."},
+"CAN":{e:"Canada",f:"🇨🇦",c:"오타와",p:"3,900만",g:"북미",l:"영어, 프랑스어",rf:"free",desc:"다문화 국가로, 무종교 인구가 증가 중입니다."},
+"CHL":{e:"Chile",f:"🇨🇱",c:"산티아고",p:"1,960만",g:"남미",l:"스페인어",rf:"free",desc:"가톨릭 전통이 강하지만 세속화가 진행 중입니다."},
+"CHN":{e:"China",f:"🇨🇳",c:"베이징",p:"14억 3,000만",g:"아시아",l:"중국어(만다린)",rf:"restricted",desc:"공식적으로 무신론을 표방합니다."},
+"COL":{e:"Colombia",f:"🇨🇴",c:"보고타",p:"5,200만",g:"남미",l:"스페인어",rf:"free",desc:"가톨릭 전통이 강합니다."},
+"CRI":{e:"Costa Rica",f:"🇨🇷",c:"산호세",p:"520만",g:"북미",l:"스페인어",rf:"free",sr:"가톨릭",desc:"가톨릭이 헌법상 국교입니다."},
+"HRV":{e:"Croatia",f:"🇭🇷",c:"자그레브",p:"380만",g:"유럽",l:"크로아티아어",rf:"free",desc:"가톨릭이 국가 정체성과 깊이 연결됩니다."},
+"CZE":{e:"Czechia",f:"🇨🇿",c:"프라하",p:"1,080만",g:"유럽",l:"체코어",rf:"free",desc:"유럽에서 가장 세속화된 국가 중 하나입니다."},
+"DNK":{e:"Denmark",f:"🇩🇰",c:"코펜하겐",p:"590만",g:"유럽",l:"덴마크어",rf:"free",sr:"루터교",desc:"덴마크 국교회(루터교)가 국교입니다."},
+"EGY":{e:"Egypt",f:"🇪🇬",c:"카이로",p:"1억 400만",g:"아프리카",l:"아랍어",rf:"partial",sr:"이슬람",desc:"이슬람이 국교입니다."},
+"ERI":{e:"Eritrea",f:"🇪🇷",c:"아스마라",p:"360만",g:"아프리카",l:"티그리냐어, 아랍어",rf:"restricted",desc:"정부 승인 4개 종교만 허용됩니다."},
+"ETH":{e:"Ethiopia",f:"🇪🇹",c:"아디스아바바",p:"1억 2,000만",g:"아프리카",l:"암하라어",rf:"free",desc:"세계에서 가장 오래된 기독교 전통 중 하나입니다."},
+"FIN":{e:"Finland",f:"🇫🇮",c:"헬싱키",p:"550만",g:"유럽",l:"핀란드어, 스웨덴어",rf:"free",sr:"루터교(전통적)",desc:"복음루터교회가 전통적 국가 교회입니다."},
+"FRA":{e:"France",f:"🇫🇷",c:"파리",p:"6,800만",g:"유럽",l:"프랑스어",rf:"free",desc:"엄격한 정교분리(라이시테) 원칙의 세속 국가입니다."},
+"DEU":{e:"Germany",f:"🇩🇪",c:"베를린",p:"8,400만",g:"유럽",l:"독일어",rf:"free",desc:"가톨릭(남부)과 개신교(북부)가 지역별로 나뉩니다."},
+"GRC":{e:"Greece",f:"🇬🇷",c:"아테네",p:"1,040만",g:"유럽",l:"그리스어",rf:"free",sr:"그리스 정교회",desc:"정교회가 헌법상 '우세한 종교'입니다."},
+"IND":{e:"India",f:"🇮🇳",c:"뉴델리",p:"14억 4,000만",g:"아시아",l:"힌디어, 영어 외",rf:"partial",desc:"힌두교 발상지이자 세계 최다 힌두교 인구 보유국입니다."},
+"IDN":{e:"Indonesia",f:"🇮🇩",c:"자카르타",p:"2억 7,800만",g:"아시아",l:"인도네시아어",rf:"partial",sr:"판차실라",desc:"세계 최대 무슬림 인구 국가입니다."},
+"IRN":{e:"Iran",f:"🇮🇷",c:"테헤란",p:"8,700만",g:"아시아",l:"페르시아어",rf:"restricted",sr:"시아파 이슬람",desc:"시아파 이슬람 신정체제입니다."},
+"IRQ":{e:"Iraq",f:"🇮🇶",c:"바그다드",p:"4,300만",g:"아시아",l:"아랍어, 쿠르드어",rf:"partial",sr:"이슬람",desc:"시아파 다수와 수니파 소수의 종파 간 긴장이 존재합니다."},
+"IRL":{e:"Ireland",f:"🇮🇪",c:"더블린",p:"510만",g:"유럽",l:"아일랜드어, 영어",rf:"free",desc:"역사적으로 가톨릭 정체성이 강합니다."},
+"ISR":{e:"Israel",f:"🇮🇱",c:"예루살렘",p:"960만",g:"아시아",l:"히브리어, 아랍어",rf:"partial",sr:"유대교(사실상)",desc:"세계 유일의 유대교 다수 국가입니다."},
+"ITA":{e:"Italy",f:"🇮🇹",c:"로마",p:"5,900만",g:"유럽",l:"이탈리아어",rf:"free",desc:"바티칸 시국 소재지이며 가톨릭의 역사적 중심지입니다."},
+"JPN":{e:"Japan",f:"🇯🇵",c:"도쿄",p:"1억 2,400만",g:"아시아",l:"일본어",rf:"free",desc:"신토와 불교가 공존합니다."},
+"JOR":{e:"Jordan",f:"🇯🇴",c:"암만",p:"1,100만",g:"아시아",l:"아랍어",rf:"partial",sr:"이슬람",desc:"이슬람이 국교입니다."},
+"KAZ":{e:"Kazakhstan",f:"🇰🇿",c:"아스타나",p:"1,950만",g:"아시아",l:"카자흐어, 러시아어",rf:"partial",desc:"이슬람 다수이나 세속 국가를 표방합니다."},
+"KEN":{e:"Kenya",f:"🇰🇪",c:"나이로비",p:"5,500만",g:"아프리카",l:"스와힐리어, 영어",rf:"free",desc:"기독교가 주류입니다."},
+"PRK":{e:"North Korea",f:"🇰🇵",c:"평양",p:"2,600만",g:"아시아",l:"한국어",rf:"restricted",desc:"종교 활동이 사실상 금지됩니다."},
+"KOR":{e:"South Korea",f:"🇰🇷",c:"서울",p:"5,180만",g:"아시아",l:"한국어",rf:"free",desc:"무종교·개신교·불교·가톨릭이 고루 분포합니다."},
+"LBN":{e:"Lebanon",f:"🇱🇧",c:"베이루트",p:"540만",g:"아시아",l:"아랍어",rf:"partial",desc:"18개 공인 종파가 존재합니다."},
+"MYS":{e:"Malaysia",f:"🇲🇾",c:"쿠알라룸푸르",p:"3,400만",g:"아시아",l:"말레이어",rf:"partial",sr:"이슬람",desc:"이슬람이 국교입니다."},
+"MEX":{e:"Mexico",f:"🇲🇽",c:"멕시코시티",p:"1억 3,000만",g:"북미",l:"스페인어",rf:"free",desc:"세계 두 번째 가톨릭 인구 보유국입니다."},
+"MAR":{e:"Morocco",f:"🇲🇦",c:"라바트",p:"3,700만",g:"아프리카",l:"아랍어, 베르베르어",rf:"partial",sr:"이슬람",desc:"국왕이 '신도의 수장' 칭호를 가집니다."},
+"MMR":{e:"Myanmar",f:"🇲🇲",c:"네피도",p:"5,400만",g:"아시아",l:"미얀마어",rf:"partial",sr:"불교(사실상)",desc:"상좌부 불교가 주류입니다."},
+"NPL":{e:"Nepal",f:"🇳🇵",c:"카트만두",p:"3,000만",g:"아시아",l:"네팔어",rf:"partial",desc:"세계 유일의 힌두교 왕국이었습니다."},
+"NLD":{e:"Netherlands",f:"🇳🇱",c:"암스테르담",p:"1,770만",g:"유럽",l:"네덜란드어",rf:"free",desc:"종교적 관용의 역사가 깊습니다."},
+"NGA":{e:"Nigeria",f:"🇳🇬",c:"아부자",p:"2억 2,000만",g:"아프리카",l:"영어",rf:"partial",desc:"북부(이슬람)와 남부(기독교)로 나뉩니다."},
+"NOR":{e:"Norway",f:"🇳🇴",c:"오슬로",p:"550만",g:"유럽",l:"노르웨이어",rf:"free",sr:"루터교(2017년까지)",desc:"루터교 전통이 강합니다."},
+"PAK":{e:"Pakistan",f:"🇵🇰",c:"이슬라마바드",p:"2억 3,000만",g:"아시아",l:"우르두어, 영어",rf:"restricted",sr:"이슬람",desc:"이슬람 공화국입니다."},
+"PHL":{e:"Philippines",f:"🇵🇭",c:"마닐라",p:"1억 1,500만",g:"아시아",l:"필리핀어, 영어",rf:"free",desc:"아시아 최대 가톨릭 국가입니다."},
+"POL":{e:"Poland",f:"🇵🇱",c:"바르샤바",p:"3,770만",g:"유럽",l:"폴란드어",rf:"free",desc:"유럽에서 가장 가톨릭적인 국가 중 하나입니다."},
+"ROU":{e:"Romania",f:"🇷🇴",c:"부쿠레슈티",p:"1,900만",g:"유럽",l:"루마니아어",rf:"free",desc:"정교회가 국가 정체성의 핵심입니다."},
+"RUS":{e:"Russia",f:"🇷🇺",c:"모스크바",p:"1억 4,400만",g:"유럽/아시아",l:"러시아어",rf:"partial",sr:"정교회(전통적)",desc:"러시아 정교회가 특별 지위를 가집니다."},
+"SAU":{e:"Saudi Arabia",f:"🇸🇦",c:"리야드",p:"3,600만",g:"아시아",l:"아랍어",rf:"restricted",sr:"와하비즘(수니 이슬람)",desc:"이슬람 두 성지 수호국입니다."},
+"SGP":{e:"Singapore",f:"🇸🇬",c:"싱가포르",p:"590만",g:"아시아",l:"영어, 중국어, 말레이어, 타밀어",rf:"partial",desc:"다종교가 공존합니다."},
+"ZAF":{e:"South Africa",f:"🇿🇦",c:"프리토리아",p:"6,100만",g:"아프리카",l:"11개 공용어",rf:"free",desc:"다양한 기독교 교파가 공존합니다."},
+"ESP":{e:"Spain",f:"🇪🇸",c:"마드리드",p:"4,800만",g:"유럽",l:"스페인어",rf:"free",desc:"역사적 가톨릭 국가입니다."},
+"LKA":{e:"Sri Lanka",f:"🇱🇰",c:"스리자야와르데네푸라코테",p:"2,200만",g:"아시아",l:"싱할라어, 타밀어",rf:"partial",sr:"불교(헌법상 보호)",desc:"헌법이 불교에 '으뜸 지위'를 부여합니다."},
+"SWE":{e:"Sweden",f:"🇸🇪",c:"스톡홀름",p:"1,050만",g:"유럽",l:"스웨덴어",rf:"free",desc:"세속화가 매우 진행된 국가입니다."},
+"CHE":{e:"Switzerland",f:"🇨🇭",c:"베른",p:"880만",g:"유럽",l:"독일어, 프랑스어, 이탈리아어",rf:"free",desc:"종교개혁의 주요 무대였습니다."},
+"THA":{e:"Thailand",f:"🇹🇭",c:"방콕",p:"7,200만",g:"아시아",l:"태국어",rf:"free",sr:"불교(사실상)",desc:"상좌부 불교가 국가 정체성의 핵심입니다."},
+"TUR":{e:"Türkiye",f:"🇹🇷",c:"앙카라",p:"8,500만",g:"아시아/유럽",l:"터키어",rf:"partial",desc:"헌법상 세속 국가입니다."},
+"UKR":{e:"Ukraine",f:"🇺🇦",c:"키이우",p:"3,700만",g:"유럽",l:"우크라이나어",rf:"free",desc:"우크라이나 정교회가 2019년 독립했습니다."},
+"ARE":{e:"United Arab Emirates",f:"🇦🇪",c:"아부다비",p:"1,000만",g:"아시아",l:"아랍어",rf:"partial",sr:"이슬람",desc:"이슬람이 국교입니다."},
+"GBR":{e:"United Kingdom",f:"🇬🇧",c:"런던",p:"6,700만",g:"유럽",l:"영어",rf:"free",sr:"성공회(잉글랜드)",desc:"성공회가 잉글랜드 국교입니다."},
+"USA":{e:"United States",f:"🇺🇸",c:"워싱턴 D.C.",p:"3억 3,100만",g:"북미",l:"영어",rf:"free",desc:"정교분리 원칙의 세속 국가입니다."},
+"VNM":{e:"Vietnam",f:"🇻🇳",c:"하노이",p:"1억",g:"아시아",l:"베트남어",rf:"partial",desc:"공산 정권 하에 다양한 종교가 존재합니다."},
+"PSE":{e:"Palestine",f:"🇵🇸",c:"라말라",p:"530만",g:"아시아",l:"아랍어",rf:"partial",sr:"이슬람",desc:"이슬람이 다수입니다."},
+"TWN":{e:"Taiwan",f:"🇹🇼",c:"타이베이",p:"2,400만",g:"아시아",l:"중국어(만다린)",rf:"free",desc:"불교·도교·전통 민간 신앙이 혼합됩니다."},
+"MNG":{e:"Mongolia",f:"🇲🇳",c:"울란바토르",p:"340만",g:"아시아",l:"몽골어",rf:"free",desc:"티베트 불교 전통이 강합니다."},
+"HUN":{e:"Hungary",f:"🇭🇺",c:"부다페스트",p:"970만",g:"유럽",l:"헝가리어",rf:"free",desc:"가톨릭과 개신교가 공존합니다."},
+"PRT":{e:"Portugal",f:"🇵🇹",c:"리스본",p:"1,040만",g:"유럽",l:"포르투갈어",rf:"free",desc:"가톨릭 전통이 깊은 국가입니다."},
+"NZL":{e:"New Zealand",f:"🇳🇿",c:"웰링턴",p:"520만",g:"오세아니아",l:"영어, 마오리어",rf:"free",desc:"세속화가 진행 중입니다."},
+"CUB":{e:"Cuba",f:"🇨🇺",c:"아바나",p:"1,130만",g:"북미",l:"스페인어",rf:"partial",desc:"공산 체제하 종교 활동이 제한적입니다."},
+"PER":{e:"Peru",f:"🇵🇪",c:"리마",p:"3,400만",g:"남미",l:"스페인어, 케추아어",rf:"free",desc:"가톨릭 전통이 강합니다."}
+};
+
+// ── Global religion stats (Pew 2020 est.) ──
+const GLOBAL_STATS_NAMES={
+  "기독교":{en:"Christianity",ja:"キリスト教"},
+  "이슬람":{en:"Islam",ja:"イスラム教"},
+  "수니파":{en:"Sunni",ja:"スンニ派"},
+  "시아파":{en:"Shia",ja:"シーア派"}
+};
+function gn(n){if(currentLang==='ko')return n;const t=GLOBAL_STATS_NAMES[n];if(t)return t[currentLang]||t.en||n;const r=RELIGIONS[n];if(r)return r[currentLang]||r.en||n;return n;}
+const GLOBAL_STATS=[
+  {n:"기독교",icon:"✝️",p:31.1,c:"#5faae3",sub:[{n:"가톨릭",p:16.8},{n:"개신교",p:8.9},{n:"정교회",p:3.8},{n:"기타",p:1.6}]},
+  {n:"이슬람",icon:"☪️",p:24.9,c:"#2ecc71",sub:[{n:"수니파",p:20.8},{n:"시아파",p:3.6},{n:"기타",p:0.5}]},
+  {n:"무종교",icon:"⚛️",p:15.6,c:"#95a5a6"},
+  {n:"힌두교",icon:"🕉️",p:15.2,c:"#e67e22"},
+  {n:"불교",icon:"☸️",p:6.6,c:"#f1c40f"},
+  {n:"전통종교",icon:"🌿",p:5.6,c:"#e74c3c"},
+  {n:"유대교",icon:"✡️",p:0.2,c:"#9b59b6"},
+  {n:"기타",icon:"🔵",p:0.8,c:"#7f8c8d"}
+];
+const CONTINENT_DATA=[
+  {key:"cont_europe",data:[{n:"가톨릭",p:35},{n:"개신교",p:13},{n:"정교회",p:23},{n:"수니파 이슬람",p:6},{n:"무종교",p:20},{n:"기타",p:3}]},
+  {key:"cont_asia",data:[{n:"수니파 이슬람",p:27},{n:"힌두교",p:25},{n:"불교",p:12},{n:"무종교",p:21},{n:"기타",p:15}]},
+  {key:"cont_africa",data:[{n:"수니파 이슬람",p:42},{n:"가톨릭",p:19},{n:"개신교",p:22},{n:"전통종교",p:12},{n:"기타",p:5}]},
+  {key:"cont_namerica",data:[{n:"개신교",p:33},{n:"가톨릭",p:27},{n:"무종교",p:28},{n:"기타",p:12}]},
+  {key:"cont_samerica",data:[{n:"가톨릭",p:62},{n:"개신교",p:20},{n:"무종교",p:14},{n:"기타",p:4}]},
+  {key:"cont_oceania",data:[{n:"개신교",p:36},{n:"가톨릭",p:24},{n:"무종교",p:30},{n:"기타",p:10}]}
+];
+
+// ── Stats sidebar (tab-aware) ──
+function buildStats(){
+  const sb=document.getElementById('stats-sidebar');
+  if(currentTab==='religion') buildReligionStats(sb);
+  else if(currentTab==='food') buildFoodStats(sb);
+  else if(currentTab==='politics') buildPoliticsStats(sb);
+  else if(currentTab==='movies') buildMoviesStats(sb);
+  else if(currentTab==='languages') buildLanguagesStats(sb);
+  else if(currentTab==='business') buildBusinessStats(sb);
+}
+
+function buildReligionStats(sb){
+  let html='';
+  html+='<div class="stats-section"><h3>'+t('globalStats')+'</h3>';
+  GLOBAL_STATS.forEach(s=>{
+    html+=`<div class="global-bar">
+      <div class="global-bar-label"><span><span class="gb-icon">${s.icon}</span> ${gn(s.n)}</span><span class="global-bar-pct">${s.p}%</span></div>
+      <div class="global-bar-track"><div class="global-bar-fill" style="width:${s.p*100/31.1}%;background:${s.c}"></div></div>`;
+    if(s.sub){
+      html+='<div style="padding-left:22px;margin-top:2px">';
+      s.sub.forEach(ss=>{
+        html+=`<div style="font-size:10px;color:#666;display:flex;justify-content:space-between;margin:1px 0"><span>└ ${gn(ss.n)}</span><span>${ss.p}%</span></div>`;
+      });
+      html+='</div>';
+    }
+    html+='</div>';
+  });
+  html+='<div style="margin-top:8px;font-size:9px;color:#444;text-align:center">'+t('globalNote')+'</div></div>';
+  html+='<div class="stats-section"><h3>'+t('continentStats')+'</h3>';
+  CONTINENT_DATA.forEach(cont=>{
+    html+=`<div class="continent-row"><div class="continent-name">${t(cont.key)}</div><div class="continent-stack">`;
+    cont.data.forEach(d=>{
+      const col=rc(d.n).c;
+      html+=`<div class="continent-seg" style="width:${d.p}%;background:${col}" title="${rn(d.n)} ${d.p}%"></div>`;
+    });
+    html+='</div><div style="display:flex;flex-wrap:wrap;gap:2px 8px;margin-top:2px">';
+    cont.data.forEach(d=>{
+      const col=rc(d.n).c;
+      html+=`<span style="font-size:9px;color:#666"><span style="color:${col}">●</span> ${rn(d.n)} ${d.p}%</span>`;
+    });
+    html+='</div></div>';
+  });
+  html+='</div>';
+  sb.innerHTML=html;
+  animateBars(sb);
+}
+
+function buildFoodStats(sb){
+  let html='<div class="stats-section"><h3>'+t('food_statsTitle')+'</h3>';
+  Object.entries(FOOD_REGIONS).forEach(([region,data])=>{
+    html+=`<div class="global-bar"><div class="global-bar-label"><span><span style="color:${data.c}">●</span> ${region}</span><span class="global-bar-pct">${data.countries.length}개국</span></div>
+    <div class="global-bar-track"><div class="global-bar-fill" style="width:${data.countries.length*100/15}%;background:${data.c}"></div></div></div>`;
+  });
+  html+='</div>';
+  // Top dishes section
+  html+='<div class="stats-section"><h3>🌟 인기 음식 Top 10</h3>';
+  const topDishes = [
+    {dish:"🍕 피자",country:"이탈리아"},{dish:"🍣 스시",country:"일본"},
+    {dish:"🌮 타코",country:"멕시코"},{dish:"🍜 퍼(쌀국수)",country:"베트남"},
+    {dish:"🥘 커리",country:"인도"},{dish:"🍔 햄버거",country:"미국"},
+    {dish:"🥟 딤섬",country:"중국"},{dish:"🍛 팟타이",country:"태국"},
+    {dish:"🥩 슈하스코",country:"브라질"},{dish:"🧆 팔라펠",country:"중동"}
+  ];
+  topDishes.forEach(d=>{
+    html+=`<div style="font-size:12px;padding:3px 0;display:flex;justify-content:space-between"><span>${d.dish}</span><span style="color:#666">${d.country}</span></div>`;
+  });
+  html+='</div>';
+  sb.innerHTML=html;
+  animateBars(sb);
+}
+
+function buildPoliticsStats(sb){
+  // Count gov types
+  const counts={};
+  Object.values(POLITICS_DATA).forEach(d=>{
+    counts[d.gov]=(counts[d.gov]||0)+1;
+  });
+  const total=Object.values(counts).reduce((a,b)=>a+b,0);
+  let html='<div class="stats-section"><h3>'+t('pol_statsTitle')+'</h3>';
+  Object.entries(counts).sort((a,b)=>b[1]-a[1]).forEach(([gov,cnt])=>{
+    const gt=GOV_TYPES[gov]||{c:'#666',icon:'🏛️'};
+    const label=currentLang==='ko'?gov:(currentLang==='ja'?(gt.ja||gov):(gt.en||gov));
+    html+=`<div class="global-bar"><div class="global-bar-label"><span>${gt.icon} ${label}</span><span class="global-bar-pct">${cnt}개국 (${Math.round(cnt/total*100)}%)</span></div>
+    <div class="global-bar-track"><div class="global-bar-fill" style="width:${cnt/total*100}%;background:${gt.c}"></div></div></div>`;
+  });
+  html+='</div>';
+  sb.innerHTML=html;
+  animateBars(sb);
+}
+
+function buildMoviesStats(sb){
+  const counts={};
+  Object.values(MOVIES_DATA).forEach(d=>{
+    counts[d.industry]=(counts[d.industry]||0)+1;
+  });
+  let html='<div class="stats-section"><h3>'+t('mov_statsTitle')+'</h3>';
+  Object.entries(counts).sort((a,b)=>b[1]-a[1]).forEach(([ind,cnt])=>{
+    const mi=MOVIE_INDUSTRY[ind]||{c:'#666'};
+    const label=currentLang==='ko'?ind:(currentLang==='ja'?(mi.ja||ind):(mi.en||ind));
+    html+=`<div class="global-bar"><div class="global-bar-label"><span>🎬 ${label}</span><span class="global-bar-pct">${cnt}개국</span></div>
+    <div class="global-bar-track"><div class="global-bar-fill" style="width:${cnt*100/15}%;background:${mi.c}"></div></div></div>`;
+  });
+  html+='</div>';
+  // Notable film festivals
+  html+='<div class="stats-section"><h3>🏆 주요 영화제</h3>';
+  [{n:"칸 영화제",l:"🇫🇷 프랑스"},{n:"베니스 영화제",l:"🇮🇹 이탈리아"},{n:"베를린 영화제",l:"🇩🇪 독일"},{n:"아카데미 시상식",l:"🇺🇸 미국"},{n:"부산국제영화제",l:"🇰🇷 한국"},{n:"토론토영화제",l:"🇨🇦 캐나다"}].forEach(f=>{
+    html+=`<div style="font-size:12px;padding:3px 0;display:flex;justify-content:space-between"><span>🏆 ${f.n}</span><span style="color:#666">${f.l}</span></div>`;
+  });
+  html+='</div>';
+  sb.innerHTML=html;
+  animateBars(sb);
+}
+
+function buildLanguagesStats(sb){
+  const counts={};
+  Object.values(LANGUAGES_DATA).forEach(d=>{
+    counts[d.family]=(counts[d.family]||0)+1;
+  });
+  const total=Object.values(counts).reduce((a,b)=>a+b,0);
+  let html='<div class="stats-section"><h3>'+t('lang_statsTitle')+'</h3>';
+  Object.entries(counts).sort((a,b)=>b[1]-a[1]).forEach(([fam,cnt])=>{
+    const lf=LANG_FAMILIES[fam]||{c:'#666',icon:'🔵'};
+    const label=currentLang==='ko'?fam:(currentLang==='ja'?(lf.ja||fam):(lf.en||fam));
+    html+=`<div class="global-bar"><div class="global-bar-label"><span>${lf.icon} ${label}</span><span class="global-bar-pct">${cnt}개국</span></div>
+    <div class="global-bar-track"><div class="global-bar-fill" style="width:${cnt/total*100}%;background:${lf.c}"></div></div></div>`;
+  });
+  html+='</div>';
+  // Fun greetings
+  html+='<div class="stats-section"><h3>👋 세계의 인사말</h3>';
+  [{g:"Hello!",l:"영어"},{g:"你好!",l:"중국어"},{g:"¡Hola!",l:"스페인어"},{g:"Bonjour!",l:"프랑스어"},{g:"こんにちは!",l:"일본어"},{g:"안녕하세요!",l:"한국어"},{g:"Merhaba!",l:"터키어"},{g:"Xin chào!",l:"베트남어"}].forEach(x=>{
+    html+=`<div style="font-size:12px;padding:3px 0;display:flex;justify-content:space-between"><span>${x.g}</span><span style="color:#666">${x.l}</span></div>`;
+  });
+  html+='</div>';
+  sb.innerHTML=html;
+  animateBars(sb);
+}
+
+function buildBusinessStats(sb){
+  const counts={};
+  Object.values(BUSINESS_DATA).forEach(d=>{
+    counts[d.industry]=(counts[d.industry]||0)+1;
+  });
+  const total=Object.values(counts).reduce((a,b)=>a+b,0);
+  let html='<div class="stats-section"><h3>'+t('biz_statsTitle')+'</h3>';
+  Object.entries(counts).sort((a,b)=>b[1]-a[1]).forEach(([ind,cnt])=>{
+    const bi=BIZ_INDUSTRIES[ind]||{c:'#666',icon:'🏢'};
+    const label=currentLang==='ko'?ind:(currentLang==='ja'?(bi.ja||ind):(bi.en||ind));
+    html+=`<div class="global-bar"><div class="global-bar-label"><span>${bi.icon} ${label}</span><span class="global-bar-pct">${cnt}개국</span></div>
+    <div class="global-bar-track"><div class="global-bar-fill" style="width:${cnt/total*100}%;background:${bi.c}"></div></div></div>`;
+  });
+  html+='</div>';
+  html+='<div class="stats-section"><h3>💰 시가총액 Top 10</h3>';
+  [{n:"Apple",c:"🇺🇸"},{n:"Microsoft",c:"🇺🇸"},{n:"Saudi Aramco",c:"🇸🇦"},{n:"NVIDIA",c:"🇺🇸"},{n:"Amazon",c:"🇺🇸"},{n:"Alphabet",c:"🇺🇸"},{n:"TSMC",c:"🇹🇼"},{n:"Samsung",c:"🇰🇷"},{n:"LVMH",c:"🇫🇷"},{n:"Novo Nordisk",c:"🇩🇰"}].forEach(x=>{
+    html+=`<div style="font-size:12px;padding:3px 0;display:flex;justify-content:space-between"><span>${x.c} ${x.n}</span></div>`;
+  });
+  html+='</div>';
+  sb.innerHTML=html;
+  animateBars(sb);
+}
+
+function animateBars(container){
+  setTimeout(()=>{
+    container.querySelectorAll('.global-bar-fill').forEach(el=>{
+      const w=el.style.width; el.style.width='0';
+      requestAnimationFrame(()=>el.style.width=w);
+    });
+  },100);
+}
+
+let statsVisible=true;
+function toggleStats(){
+  const sb=document.getElementById('stats-sidebar');
+  statsVisible=!statsVisible;
+  sb.classList.toggle('collapsed',!statsVisible);
+  setTimeout(resize,350);
+}
+
+// ── Map fill per tab ──
+function getMapFill(iso){
+  if(currentTab==='religion'){
+    const d=DATA[iso];
+    if(!d||!d.r||!d.r.length)return '#222';
+    const rm=RELIGIONS[d.r[0].n];
+    return rm?rm.fill||rm.c:'#222';
+  } else if(currentTab==='food'){
+    const fr=getFoodRegion(iso);
+    return fr?fr.color:'#1a1a2e';
+  } else if(currentTab==='politics'){
+    const pd=POLITICS_DATA[iso];
+    if(!pd)return '#1a1a2e';
+    const gt=GOV_TYPES[pd.gov];
+    return gt?gt.c:'#1a1a2e';
+  } else if(currentTab==='movies'){
+    const md=MOVIES_DATA[iso];
+    if(!md)return '#1a1a2e';
+    const mi=MOVIE_INDUSTRY[md.industry];
+    return mi?mi.c:'#1a1a2e';
+  } else if(currentTab==='languages'){
+    const ld=LANGUAGES_DATA[iso];
+    if(!ld)return '#1a1a2e';
+    const lf=LANG_FAMILIES[ld.family];
+    return lf?lf.c:'#1a1a2e';
+  } else if(currentTab==='business'){
+    const bd=BUSINESS_DATA[iso];
+    if(!bd)return '#1a1a2e';
+    const bi=BIZ_INDUSTRIES[bd.industry];
+    return bi?bi.c:'#1a1a2e';
+  }
+  return '#222';
+}
+
+// ── Tooltip per tab ──
+function buildTooltipHTML(iso){
+  if(currentTab==='religion'){
+    const info=DATA[iso];
+    if(!info)return null;
+    let html=`<div class="tt-name">${info.n}</div>`;
+    info.r.forEach(r=>{const rm=rc(r.n);
+      html+=`<div class="tt-religion"><span style="color:${rm.c}">${rm.icon}</span> ${rn(r.n)}: ${r.p}%</div>`;
+      html+=`<div class="tt-bar"><div class="tt-bar-fill" style="width:${r.p}%;background:${rm.c}"></div></div>`;
+    });
+    return html;
+  } else if(currentTab==='food'){
+    const fd=FOOD_DATA[iso];
+    if(!fd)return null;
+    const name=currentLang==='en'?fd.en:(currentLang==='ja'?(fd.ja||fd.n):fd.n);
+    let html=`<div class="tt-name">${fd.f} ${name}</div>`;
+    fd.dishes.slice(0,3).forEach(d=>{
+      const dn=currentLang==='en'?d.en:(currentLang==='ja'?d.ja:d.ko);
+      html+=`<div class="tt-dish"><span class="tt-dish-name">${dn}</span><br><span style="color:#888;font-size:11px">${d.flavor}</span></div>`;
+    });
+    if(fd.dishes.length>3) html+=`<div style="color:#666;font-size:11px">+${fd.dishes.length-3} more...</div>`;
+    return html;
+  } else if(currentTab==='politics'){
+    const pd=POLITICS_DATA[iso];
+    if(!pd)return null;
+    const gt=GOV_TYPES[pd.gov]||{icon:'🏛️',c:'#666'};
+    const govLabel=currentLang==='ko'?pd.gov:(currentLang==='ja'?(gt.ja||pd.gov):(gt.en||pd.gov));
+    let html=`<div class="tt-name">${pd.f} ${currentLang==='en'?pd.en:pd.n}</div>`;
+    html+=`<div class="tt-info">${gt.icon} <strong>${govLabel}</strong></div>`;
+    html+=`<div class="tt-info" style="color:#aaa">${pd.leader}</div>`;
+    return html;
+  } else if(currentTab==='movies'){
+    const md=MOVIES_DATA[iso];
+    if(!md)return null;
+    let html=`<div class="tt-name">${md.f} ${currentLang==='en'?md.en:md.n}</div>`;
+    const mi=MOVIE_INDUSTRY[md.industry]||{};
+    const indLabel=currentLang==='ko'?md.industry:(currentLang==='ja'?(mi.ja||md.industry):(mi.en||md.industry));
+    html+=`<div class="tt-info">🎬 ${indLabel}</div>`;
+    md.movies.slice(0,2).forEach(m=>{
+      const mn=currentLang==='en'?m.en:(currentLang==='ja'?m.ja:m.ko);
+      html+=`<div class="tt-dish"><span class="tt-dish-name">${mn}</span> <span style="color:#888">(${m.year})</span></div>`;
+    });
+    return html;
+  } else if(currentTab==='languages'){
+    const ld=LANGUAGES_DATA[iso];
+    if(!ld)return null;
+    let html=`<div class="tt-name">${ld.f} ${currentLang==='en'?ld.en:ld.n}</div>`;
+    html+=`<div class="tt-greeting">${ld.greeting}</div>`;
+    const famLabel=currentLang==='ko'?ld.family:(currentLang==='ja'?(LANG_FAMILIES[ld.family]?.ja||ld.family):(LANG_FAMILIES[ld.family]?.en||ld.family));
+    html+=`<div class="tt-info">${LANG_FAMILIES[ld.family]?.icon||'🌐'} ${famLabel}</div>`;
+    html+=`<div class="tt-info" style="color:#aaa">${ld.official}</div>`;
+    return html;
+  } else if(currentTab==='business'){
+    const bd=BUSINESS_DATA[iso];
+    if(!bd)return null;
+    const bi=BIZ_INDUSTRIES[bd.industry]||{icon:'🏢',c:'#666'};
+    const indLabel=currentLang==='ko'?bd.industry:(currentLang==='ja'?(bi.ja||bd.industry):(bi.en||bd.industry));
+    let html=`<div class="tt-name">${bd.f} ${currentLang==='en'?bd.en:bd.n}</div>`;
+    html+=`<div class="tt-info">${bi.icon} ${indLabel}</div>`;
+    bd.companies.slice(0,2).forEach(c=>{
+      const cn=currentLang==='en'?c.en:(currentLang==='ja'?c.ja:c.ko);
+      html+=`<div class="tt-dish"><span class="tt-dish-name">${cn}</span></div>`;
+    });
+    return html;
+  }
+  return null;
+}
+
+// ── Unified Panel ──
+function openPanel(iso,el){
+  openUnifiedPanel(iso,el);
+}
+
+let panelActiveTab = 'overview';
+
+function openUnifiedPanel(iso,el){
+  // Check if any data exists
+  const hasAny = DATA[iso] || FOOD_DATA[iso] || POLITICS_DATA[iso] || MOVIES_DATA[iso] || LANGUAGES_DATA[iso] || BUSINESS_DATA[iso] || PROFILE[iso];
+  if(!hasAny) return;
+  showPanel(el);
+  
+  const prof = PROFILE[iso];
+  const info = DATA[iso];
+  const fd = FOOD_DATA[iso];
+  const pd = POLITICS_DATA[iso];
+  const md = MOVIES_DATA[iso];
+  const ld = LANGUAGES_DATA[iso];
+  const bd = BUSINESS_DATA[iso];
+  
+  // Determine name and flag
+  const flag = prof?.f || fd?.f || pd?.f || md?.f || ld?.f || bd?.f || '🏳️';
+  const name = prof ? (currentLang==='en'? prof.e : info?.n || pd?.n || fd?.n || '?') : (info?.n || fd?.n || pd?.n || md?.n || ld?.n || bd?.n || '?');
+  const enName = prof?.e || fd?.en || pd?.en || md?.en || ld?.en || bd?.en || '';
+  
+  // Build tab list
+  const tabs = [];
+  tabs.push({id:'overview',icon:'📊',label:{ko:'기본 정보',en:'Overview',ja:'基本情報'}});
+  if(info) tabs.push({id:'religion',icon:'🙏',label:{ko:'종교',en:'Religion',ja:'宗教'}});
+  if(pd) tabs.push({id:'politics',icon:'🏛️',label:{ko:'정치',en:'Politics',ja:'政治'}});
+  if(fd) tabs.push({id:'food',icon:'🍜',label:{ko:'음식',en:'Food',ja:'料理'}});
+  if(md) tabs.push({id:'movies',icon:'🎬',label:{ko:'영화',en:'Movies',ja:'映画'}});
+  if(bd) tabs.push({id:'business',icon:'💼',label:{ko:'비즈니스',en:'Business',ja:'ビジネス'}});
+  if(ld) tabs.push({id:'languages',icon:'🗣️',label:{ko:'언어',en:'Language',ja:'言語'}});
+  
+  panelActiveTab = 'overview';
+  
+  let html = panelHeader(flag, currentLang==='en'?enName:name, currentLang==='en'?'':enName);
+  
+  // Panel tabs
+  html += `<div style="display:flex;flex-wrap:wrap;gap:2px;padding:8px 16px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:3">`;
+  tabs.forEach(tab => {
+    const label = tab.label[currentLang] || tab.label.en;
+    html += `<button class="panel-tab-btn${tab.id==='overview'?' active':''}" data-ptab="${tab.id}" onclick="switchPanelTab('${iso}','${tab.id}',this)" style="background:${tab.id==='overview'?'rgba(255,255,255,.1)':'rgba(255,255,255,.04)'};border:1px solid ${tab.id==='overview'?'rgba(255,255,255,.15)':'rgba(255,255,255,.06)'};border-radius:8px;padding:5px 10px;font-size:11px;color:${tab.id==='overview'?'#fff':'#888'};cursor:pointer;display:flex;align-items:center;gap:3px;white-space:nowrap;transition:all .2s">${tab.icon} ${label}</button>`;
+  });
+  html += `</div>`;
+  
+  html += `<div id="panel-tab-content">`;
+  html += buildPanelOverview(iso);
+  html += `</div>`;
+  
+  panelContent.innerHTML = html;
+}
+
+function switchPanelTab(iso, tabId, btn){
+  panelActiveTab = tabId;
+  document.querySelectorAll('.panel-tab-btn').forEach(b => {
+    b.style.background = 'rgba(255,255,255,.04)';
+    b.style.borderColor = 'rgba(255,255,255,.06)';
+    b.style.color = '#888';
+    b.classList.remove('active');
+  });
+  btn.style.background = 'rgba(255,255,255,.1)';
+  btn.style.borderColor = 'rgba(255,255,255,.15)';
+  btn.style.color = '#fff';
+  btn.classList.add('active');
+  
+  const container = document.getElementById('panel-tab-content');
+  if(tabId==='overview') container.innerHTML = buildPanelOverview(iso);
+  else if(tabId==='religion') container.innerHTML = buildPanelReligion(iso);
+  else if(tabId==='politics') container.innerHTML = buildPanelPolitics(iso);
+  else if(tabId==='food') container.innerHTML = buildPanelFood(iso);
+  else if(tabId==='movies') container.innerHTML = buildPanelMovies(iso);
+  else if(tabId==='business') container.innerHTML = buildPanelBusiness(iso);
+  else if(tabId==='languages') container.innerHTML = buildPanelLanguages(iso);
+}
+
+function buildPanelOverview(iso){
+  const prof = PROFILE[iso];
+  const info = DATA[iso];
+  const ld = LANGUAGES_DATA[iso];
+  let html = '';
+  if(prof){
+    html += `<div class="panel-section"><h3>📊 ${currentLang==='en'?'Basic Info':currentLang==='ja'?'基本情報':'기본 정보'}</h3><div class="info-grid">
+      <div class="info-item"><div class="info-label">${t('capital')}</div><div class="info-value">${prof.c}</div></div>
+      <div class="info-item"><div class="info-label">${t('population')}</div><div class="info-value">${prof.p}</div></div>
+      <div class="info-item"><div class="info-label">${t('continent')}</div><div class="info-value">${prof.g}</div></div>
+      <div class="info-item"><div class="info-label">${t('language')}</div><div class="info-value" style="font-size:${prof.l.length>20?'11px':'13px'}">${prof.l}</div></div>
+    </div></div>`;
+    if(prof.desc) html += `<div class="panel-section"><div class="religion-desc">${prof.desc}</div></div>`;
+  }
+  // Quick summary of available data
+  const fd = FOOD_DATA[iso], pd = POLITICS_DATA[iso], md = MOVIES_DATA[iso], bd = BUSINESS_DATA[iso];
+  let summaryItems = [];
+  if(info && info.r && info.r.length) {
+    const top = info.r[0];
+    summaryItems.push(`<div class="info-item"><div class="info-label">🙏 ${currentLang==='en'?'Main Religion':currentLang==='ja'?'主要宗教':'주요 종교'}</div><div class="info-value">${rn(top.n)} ${top.p}%</div></div>`);
+  }
+  if(pd) {
+    const gt = GOV_TYPES[pd.gov]||{icon:'🏛️'};
+    const govLabel = currentLang==='ko'?pd.gov:(currentLang==='ja'?(gt.ja||pd.gov):(gt.en||pd.gov));
+    const wl = pd.wiki ? ` <a href="${pd.wiki}" target="_blank" rel="noopener" style="text-decoration:none;font-size:11px" title="Wikipedia">🔗</a>` : '';
+    summaryItems.push(`<div class="info-item"><div class="info-label">🏛️ ${currentLang==='en'?'Government':currentLang==='ja'?'政治体制':'정치체제'}</div><div class="info-value" style="font-size:12px">${govLabel}${wl}</div></div>`);
+  }
+  if(ld) {
+    summaryItems.push(`<div class="info-item"><div class="info-label">🗣️ ${currentLang==='en'?'Greeting':currentLang==='ja'?'挨拶':'인사말'}</div><div class="info-value">${ld.greeting}</div></div>`);
+  }
+  if(bd) {
+    const topCo = bd.companies[0];
+    const cn = currentLang==='en'?topCo.en:(currentLang==='ja'?topCo.ja:topCo.ko);
+    summaryItems.push(`<div class="info-item"><div class="info-label">💼 ${currentLang==='en'?'Top Company':currentLang==='ja'?'代表企業':'대표 기업'}</div><div class="info-value" style="font-size:12px">${cn}</div></div>`);
+  }
+  if(fd && fd.dishes && fd.dishes.length) {
+    const topDish = fd.dishes[0];
+    const dn = currentLang==='en'?topDish.en:(currentLang==='ja'?topDish.ja:topDish.ko);
+    summaryItems.push(`<div class="info-item"><div class="info-label">🍜 ${currentLang==='en'?'Famous Food':currentLang==='ja'?'代表料理':'대표 음식'}</div><div class="info-value" style="font-size:12px">${dn}</div></div>`);
+  }
+  if(md && md.movies && md.movies.length) {
+    const topMov = md.movies[0];
+    const mn = currentLang==='en'?topMov.en:(currentLang==='ja'?topMov.ja:topMov.ko);
+    summaryItems.push(`<div class="info-item"><div class="info-label">🎬 ${currentLang==='en'?'Famous Film':currentLang==='ja'?'代表映画':'대표 영화'}</div><div class="info-value" style="font-size:12px">${mn}</div></div>`);
+  }
+  if(summaryItems.length) {
+    html += `<div class="panel-section"><h3>🌐 ${currentLang==='en'?'At a Glance':currentLang==='ja'?'概要':'한눈에 보기'}</h3><div class="info-grid">${summaryItems.join('')}</div></div>`;
+  }
+  return html;
+}
+
+function buildPanelReligion(iso){
+  const info = DATA[iso];
+  if(!info) return `<div class="panel-section" style="color:#666;text-align:center;padding:40px">${currentLang==='en'?'No data available':currentLang==='ja'?'データ準備中':'정보 준비중'}</div>`;
+  const prof = PROFILE[iso];
+  const rfMap={free:{t:t('rfFree'),cls:"tag-free"},partial:{t:t('rfPartial'),cls:"tag-partial"},restricted:{t:t('rfRestricted'),cls:"tag-restricted"}};
+  const rf=prof?rfMap[prof.rf]||rfMap.free:rfMap.free;
+  const sorted=[...info.r].sort((a,b)=>b.p-a.p);
+  const donutSvg=buildDonutSVG(sorted,140,56,36);
+  const donutLegend=sorted.map(rel=>{
+    const rm=rc(rel.n);
+    return `<div class="pdl-item"><span class="pdl-icon">${rm.icon}</span><div class="pdl-color" style="background:${rm.c}"></div><span>${rn(rel.n)}</span><span class="pdl-pct">${rel.p}%</span></div>`;
+  }).join('');
+  const bars=sorted.map(rel=>{
+    const rm=rc(rel.n);
+    return `<div class="p-hbar"><div class="p-hbar-label"><span><span class="p-hbar-icon">${rm.icon}</span> ${rn(rel.n)}</span><span>${rel.p}%</span></div><div class="p-hbar-track"><div class="p-hbar-fill" style="width:${rel.p}%;background:${rm.c}"></div></div></div>`;
+  }).join('');
+  let html = `<div class="panel-section"><h3>${t('religionTitle')}</h3>
+    <div class="panel-donut-wrap">${donutSvg}<div class="panel-donut-legend">${donutLegend}</div></div>${bars}</div>`;
+  html += `<div class="panel-section"><h3>${t('envTitle')}</h3>
+    <div style="margin-bottom:8px"><span class="tag ${rf.cls}">${rf.t}</span>`;
+  if(prof&&prof.sr) html += `<span class="tag tag-state">${t('stateReligion')} ${prof.sr}</span>`;
+  html += `</div>`;
+  if(prof&&prof.desc) html += `<div class="religion-desc">${prof.desc}</div>`;
+  html += `</div>`;
+  return html;
+}
+
+function buildPanelPolitics(iso){
+  const pd = POLITICS_DATA[iso];
+  if(!pd) return `<div class="panel-section" style="color:#666;text-align:center;padding:40px">${currentLang==='en'?'No data available':currentLang==='ja'?'データ準備中':'정보 준비중'}</div>`;
+  const gt=GOV_TYPES[pd.gov]||{icon:'🏛️',c:'#666',en:pd.gov,ja:pd.gov};
+  const govLabel=currentLang==='ko'?pd.gov:(currentLang==='ja'?(gt.ja||pd.gov):(gt.en||pd.gov));
+  const wikiLink = pd.wiki ? ` <a href="${pd.wiki}" target="_blank" rel="noopener" style="text-decoration:none;font-size:14px" title="Wikipedia">🔗</a>` : '';
+  let html = `<div class="panel-section"><h3>${t('pol_govTitle')}</h3>
+    <div class="info-grid">
+      <div class="info-item" style="grid-column:1/-1"><div class="info-label">${t('pol_govType')}</div><div class="info-value">${gt.icon} ${govLabel}</div></div>
+      <div class="info-item" style="grid-column:1/-1"><div class="info-label">${t('pol_leaderLabel')}</div><div class="info-value" style="font-size:12px">${pd.leader}${wikiLink}</div></div>
+    </div>
+    <div style="margin-top:14px"><div class="info-label" style="margin-bottom:8px">${t('pol_partiesLabel')}</div>`;
+  pd.parties.forEach(p => html += `<span class="party-tag">${p}</span>`);
+  html += `</div></div>`;
+  return html;
+}
+
+function buildPanelFood(iso){
+  const fd = FOOD_DATA[iso];
+  if(!fd) return `<div class="panel-section" style="color:#666;text-align:center;padding:40px">${currentLang==='en'?'No data available':currentLang==='ja'?'データ準備中':'정보 준비중'}</div>`;
+  let html = `<div class="panel-section"><h3>${t('food_dishTitle')}</h3>`;
+  fd.dishes.forEach(d => {
+    const dn=currentLang==='en'?d.en:(currentLang==='ja'?d.ja:d.ko);
+    const enName=currentLang==='en'?'':`<div class="dish-name-en">${d.en}</div>`;
+    const wl = d.wiki ? ` <a href="${d.wiki}" target="_blank" rel="noopener" style="text-decoration:none;font-size:13px" title="Wikipedia">🔗</a>` : '';
+    html += `<div class="dish-card"><div class="dish-name">${dn}${wl}</div>${enName}<div class="dish-desc">${d.desc}</div><span class="dish-flavor">🍴 ${d.flavor}</span></div>`;
+  });
+  html += `</div>`;
+  return html;
+}
+
+function buildPanelMovies(iso){
+  const md = MOVIES_DATA[iso];
+  if(!md) return `<div class="panel-section" style="color:#666;text-align:center;padding:40px">${currentLang==='en'?'No data available':currentLang==='ja'?'データ準備中':'정보 준비중'}</div>`;
+  const mi=MOVIE_INDUSTRY[md.industry]||{c:'#666',en:md.industry,ja:md.industry};
+  const indLabel=currentLang==='ko'?md.industry:(currentLang==='ja'?(mi.ja||md.industry):(mi.en||md.industry));
+  let html = `<div class="panel-section"><h3>🎬 ${indLabel}</h3><div class="religion-desc">${md.desc}</div></div>`;
+  html += `<div class="panel-section"><h3>${t('mov_movieTitle')}</h3>`;
+  md.movies.forEach(m => {
+    const mn=currentLang==='en'?m.en:(currentLang==='ja'?m.ja:m.ko);
+    const enName=currentLang==='en'?'':`<div class="movie-title-en">${m.en}</div>`;
+    const wl = m.wiki ? ` <a href="${m.wiki}" target="_blank" rel="noopener" style="text-decoration:none;font-size:13px" title="Wikipedia">🔗</a>` : '';
+    html += `<div class="movie-card"><div class="movie-title">${mn}${wl}</div>${enName}<div class="movie-meta">📅 ${m.year} · 🎬 ${m.director}</div></div>`;
+  });
+  html += `</div>`;
+  return html;
+}
+
+function buildPanelBusiness(iso){
+  const bd = BUSINESS_DATA[iso];
+  if(!bd) return `<div class="panel-section" style="color:#666;text-align:center;padding:40px">${currentLang==='en'?'No data available':currentLang==='ja'?'データ準備中':'정보 준비중'}</div>`;
+  const bi=BIZ_INDUSTRIES[bd.industry]||{icon:'🏢',c:'#666',en:bd.industry,ja:bd.industry};
+  const indLabel=currentLang==='ko'?bd.industry:(currentLang==='ja'?(bi.ja||bd.industry):(bi.en||bd.industry));
+  let html = `<div class="panel-section"><h3>${bi.icon} ${t('biz_industryLabel')}: ${indLabel}</h3></div>`;
+  html += `<div class="panel-section"><h3>${t('biz_companyTitle')}</h3>`;
+  bd.companies.forEach(c => {
+    const cn=currentLang==='en'?c.en:(currentLang==='ja'?c.ja:c.ko);
+    const enName=currentLang==='en'?'':`<div class="dish-name-en">${c.en}</div>`;
+    const ci=BIZ_INDUSTRIES[c.industry]||{icon:'🏢',c:'#666'};
+    const ciLabel=currentLang==='ko'?c.industry:(currentLang==='ja'?(ci.ja||c.industry):(ci.en||c.industry));
+    const wl = c.wiki ? ` <a href="${c.wiki}" target="_blank" rel="noopener" style="text-decoration:none;font-size:13px" title="Wikipedia">🔗</a>` : '';
+    html += `<div class="dish-card"><div class="dish-name">${cn}${wl}</div>${enName}<div class="dish-desc">${c.desc}</div><span class="dish-flavor">${ci.icon} ${ciLabel}</span></div>`;
+  });
+  html += `</div>`;
+  return html;
+}
+
+function buildPanelLanguages(iso){
+  const ld = LANGUAGES_DATA[iso];
+  if(!ld) return `<div class="panel-section" style="color:#666;text-align:center;padding:40px">${currentLang==='en'?'No data available':currentLang==='ja'?'データ準備中':'정보 준비중'}</div>`;
+  const lf=LANG_FAMILIES[ld.family]||{c:'#666',icon:'🌐',en:ld.family,ja:ld.family};
+  const famLabel=currentLang==='ko'?ld.family:(currentLang==='ja'?(lf.ja||ld.family):(lf.en||ld.family));
+  const famWiki = LANG_FAMILIES[ld.family]?.wiki ? ` <a href="${LANG_FAMILIES[ld.family].wiki}" target="_blank" rel="noopener" style="text-decoration:none;font-size:13px" title="Wikipedia">🔗</a>` : '';
+  let html = `<div class="panel-section"><div class="lang-greeting">${ld.greeting}</div>
+    <div class="info-grid">
+      <div class="info-item" style="grid-column:1/-1"><div class="info-label">${t('lang_officialLabel')}</div><div class="info-value">${ld.official}</div></div>
+      <div class="info-item" style="grid-column:1/-1"><div class="info-label">${t('lang_familyLabel')}</div><div class="info-value">${lf.icon} ${famLabel}${famWiki}</div></div>
+    </div>
+    <div style="margin-top:14px"><div class="info-label" style="margin-bottom:8px">${t('lang_otherLangs')}</div>
+    <div class="lang-list">`;
+  ld.languages.forEach(l => html += `<span class="lang-tag">${l}</span>`);
+  html += `</div></div></div>`;
+  return html;
+}
+
+function showPanel(el){
+  if(selectedEl)selectedEl.classList.remove('selected');
+  el.classList.add('selected'); selectedEl=el;
+  tooltip.style.display='none';
+  panel.classList.add('open'); panelOverlay.classList.add('open');
+}
+
+function panelHeader(flag,name,enName){
+  return `<div class="panel-header"><div class="panel-flag">${flag}</div><div class="panel-country">${name}</div><div class="panel-country-en">${enName}</div></div>`;
+}
+
+function buildDonutSVG(rels,size,outerR,innerR){
+  let cum=-Math.PI/2, arcs='';
+  rels.forEach(rel=>{
+    const angle=(rel.p/100)*2*Math.PI;
+    if(angle<0.01)return;
+    const x1=Math.cos(cum)*outerR,y1=Math.sin(cum)*outerR;
+    const ea=cum+angle;
+    const x2=Math.cos(ea)*outerR,y2=Math.sin(ea)*outerR;
+    const ix1=Math.cos(cum)*innerR,iy1=Math.sin(cum)*innerR;
+    const ix2=Math.cos(ea)*innerR,iy2=Math.sin(ea)*innerR;
+    const lg=angle>Math.PI?1:0;
+    const col=rc(rel.n).c;
+    arcs+=`<path d="M${ix1},${iy1} L${x1},${y1} A${outerR},${outerR} 0 ${lg} 1 ${x2},${y2} L${ix2},${iy2} A${innerR},${innerR} 0 ${lg} 0 ${ix1},${iy1}" fill="${col}" stroke="#0f0f1e" stroke-width="1.5">
+      <animate attributeName="opacity" from="0" to="1" dur="0.5s" fill="freeze"/>
+    </path>`;
+    cum=ea;
+  });
+  const pad=outerR+6;
+  const majorIcon=rc(rels[0].n).icon;
+  return `<svg class="panel-donut-svg" width="${size}" height="${size}" viewBox="-${pad} -${pad} ${pad*2} ${pad*2}">
+    ${arcs}<text x="0" y="6" text-anchor="middle" font-size="24">${majorIcon}</text></svg>`;
+}
+
+// Old individual panel functions removed - using unified panel above
+
+// ── Map setup ──
+const svg=d3.select('#map');
+const g=svg.append('g');
+const tooltip=document.getElementById('tooltip');
+const panel=document.getElementById('panel');
+const panelOverlay=document.getElementById('panel-overlay');
+const panelContent=document.getElementById('panel-content');
+let selectedEl=null;
+
+const SMALL_COUNTRIES_GLOBAL={
+  "SGP":[1.3521,103.8198],"BHR":[26.0667,50.5577],"MDV":[4.1755,73.5093],"LUX":[49.8153,6.1296],
+  "MLT":[35.8989,14.5146],"BRN":[4.9031,114.9398],"COM":[-11.6455,43.3333],"MUS":[-20.1654,57.5020],
+  "CPV":[14.933,-23.5133],"DJI":[11.5721,43.1456],"SWZ":[-26.3054,31.1367],"TLS":[-8.5569,125.5603],
+  "TTO":[10.6918,-61.2225],"BRB":[13.1939,-59.5432],"QAT":[25.3548,51.1839],"KWT":[29.3759,47.9774],
+  "CYP":[35.1264,33.4299],"PSE":[31.9522,35.2332],"LBN":[33.8547,35.8623],
+  "BTN":[27.5142,90.4336],"GMB":[13.4432,-15.3101],"GNB":[11.8037,-15.1804],
+  "SLE":[8.4606,-11.7799],"MNE":[42.7087,19.3744],"MKD":[41.5122,20.9636],
+  "LSO":[-29.6100,28.2336],"BDI":[-3.3731,29.9189],"RWA":[-1.9403,29.8739]
+};
+const projection=d3.geoNaturalEarth1();
+const path=d3.geoPath(projection);
+const zoom=d3.zoom().scaleExtent([1,20]).on('zoom',e=>{
+  g.attr('transform',e.transform);
+  g.selectAll('.small-marker').attr('r',5/e.transform.k).attr('stroke-width',1.5/e.transform.k);
+});
+svg.call(zoom);
+
+function closePanel(){
+  panel.classList.remove('open');panelOverlay.classList.remove('open');
+  if(selectedEl){selectedEl.classList.remove('selected');selectedEl=null;}
+}
+
+function hasData(iso){
+  return !!(DATA[iso] || FOOD_DATA[iso] || POLITICS_DATA[iso] || MOVIES_DATA[iso] || LANGUAGES_DATA[iso] || BUSINESS_DATA[iso] || PROFILE[iso]);
+}
+
+function resize(){
+  const w=document.getElementById('map-container').clientWidth;
+  const h=document.getElementById('map-container').clientHeight;
+  projection.fitSize([w,h],{type:"Sphere"});
+  g.selectAll('path.country').attr('d',path);
+  g.selectAll('.small-marker').each(function(){
+    const el=d3.select(this);
+    const iso=el.attr('data-iso');
+    if(iso&&SMALL_COUNTRIES_GLOBAL[iso]){
+      const [lat,lon]=SMALL_COUNTRIES_GLOBAL[iso];
+      const [x,y]=projection([lon,lat]);
+      el.attr('cx',x).attr('cy',y);
+    }
+  });
+}
+
+function updateMapColors(){
+  g.selectAll('path.country').attr('fill',function(){
+    const iso=d3.select(this).attr('data-iso');
+    return getMapFill(iso||'');
+  });
+  g.selectAll('.small-marker').attr('fill',function(){
+    const iso=d3.select(this).attr('data-iso');
+    return getSmallMarkerColor(iso);
+  });
+}
+
+function getSmallMarkerColor(iso){
+  if(currentTab==='religion'){
+    const info=DATA[iso];
+    return info?rc(info.r[0].n).c:'#444';
+  }
+  if(currentTab==='food'){
+    const fr=getFoodRegion(iso);
+    return fr?fr.color:'#444';
+  }
+  if(currentTab==='politics'){
+    const pd=POLITICS_DATA[iso];
+    if(!pd)return '#444';
+    return (GOV_TYPES[pd.gov]||{c:'#444'}).c;
+  }
+  if(currentTab==='movies'){
+    const md=MOVIES_DATA[iso];
+    if(!md)return '#444';
+    return (MOVIE_INDUSTRY[md.industry]||{c:'#444'}).c;
+  }
+  if(currentTab==='languages'){
+    const ld=LANGUAGES_DATA[iso];
+    if(!ld)return '#444';
+    return (LANG_FAMILIES[ld.family]||{c:'#444'}).c;
+  }
+  if(currentTab==='business'){
+    const bd=BUSINESS_DATA[iso];
+    if(!bd)return '#444';
+    return (BIZ_INDUSTRIES[bd.industry]||{c:'#444'}).c;
+  }
+  return '#444';
+}
+
+// ── Tab switching ──
+function switchTab(tab){
+  currentTab=tab;
+  closePanel();
+  document.querySelectorAll('.tab-btn').forEach(b=>{
+    b.classList.toggle('active',b.dataset.tab===tab);
+  });
+  updateMapColors();
+  buildLegend();
+  buildStats();
+}
+
+const idToISO={
+"004":"AFG","008":"ALB","012":"DZA","024":"AGO","032":"ARG","051":"ARM","036":"AUS","040":"AUT",
+"031":"AZE","044":"BHS","048":"BHR","050":"BGD","052":"BRB","112":"BLR","056":"BEL","084":"BLZ",
+"204":"BEN","064":"BTN","068":"BOL","070":"BIH","072":"BWA","076":"BRA","096":"BRN","100":"BGR",
+"854":"BFA","108":"BDI","116":"KHM","120":"CMR","124":"CAN","132":"CPV","140":"CAF","148":"TCD",
+"152":"CHL","156":"CHN","170":"COL","174":"COM","178":"COG","180":"COD","188":"CRI","384":"CIV",
+"191":"HRV","192":"CUB","196":"CYP","203":"CZE","208":"DNK","262":"DJI","214":"DOM","218":"ECU",
+"818":"EGY","222":"SLV","226":"GNQ","232":"ERI","233":"EST","748":"SWZ","231":"ETH","242":"FJI",
+"246":"FIN","250":"FRA","266":"GAB","270":"GMB","268":"GEO","276":"DEU","288":"GHA","300":"GRC",
+"320":"GTM","324":"GIN","624":"GNB","328":"GUY","332":"HTI","340":"HND","348":"HUN","352":"ISL",
+"356":"IND","360":"IDN","364":"IRN","368":"IRQ","372":"IRL","376":"ISR","380":"ITA","388":"JAM",
+"392":"JPN","400":"JOR","398":"KAZ","404":"KEN","408":"PRK","410":"KOR","414":"KWT","417":"KGZ",
+"418":"LAO","428":"LVA","422":"LBN","426":"LSO","430":"LBR","434":"LBY","440":"LTU","442":"LUX",
+"450":"MDG","454":"MWI","458":"MYS","462":"MDV","466":"MLI","470":"MLT","478":"MRT","480":"MUS",
+"484":"MEX","498":"MDA","496":"MNG","499":"MNE","504":"MAR","508":"MOZ","104":"MMR","516":"NAM",
+"524":"NPL","528":"NLD","554":"NZL","558":"NIC","562":"NER","566":"NGA","807":"MKD","578":"NOR",
+"512":"OMN","586":"PAK","591":"PAN","598":"PNG","600":"PRY","604":"PER","608":"PHL","616":"POL",
+"620":"PRT","634":"QAT","642":"ROU","643":"RUS","646":"RWA","682":"SAU","686":"SEN","688":"SRB",
+"694":"SLE","702":"SGP","703":"SVK","705":"SVN","090":"SLB","706":"SOM","710":"ZAF","728":"SSD",
+"724":"ESP","144":"LKA","729":"SDN","740":"SUR","752":"SWE","756":"CHE","760":"SYR","158":"TWN",
+"762":"TJK","834":"TZA","764":"THA","626":"TLS","768":"TGO","780":"TTO","788":"TUN","792":"TUR",
+"795":"TKM","800":"UGA","804":"UKR","784":"ARE","826":"GBR","840":"USA","858":"URY","860":"UZB",
+"548":"VUT","862":"VEN","704":"VNM","887":"YEM","894":"ZMB","716":"ZWE","275":"PSE","-99":"XKX",
+"580":"MNP","304":"GRL","540":"NCL","583":"FSM","882":"WSM","776":"TON","296":"KIR"
+};
+
+let globalCountries = null;
+d3.json('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json').then(world=>{
+  const countries=topojson.feature(world,world.objects.countries);
+  globalCountries = countries;
+  g.selectAll('path').data(countries.features).join('path')
+    .attr('class','country').attr('d',path)
+    .attr('data-iso',d=>idToISO[d.id]||'')
+    .attr('fill',d=>getMapFill(idToISO[d.id]||''))
+    .on('mousemove',(ev,d)=>{
+      if(panel.classList.contains('open'))return;
+      const iso=idToISO[d.id];
+      const html=buildTooltipHTML(iso);
+      if(!html){tooltip.style.display='none';return;}
+      tooltip.innerHTML=html;tooltip.style.display='block';
+      const rect=document.getElementById('map-container').getBoundingClientRect();
+      let x=ev.clientX-rect.left+15,y=ev.clientY-rect.top+15;
+      if(x+320>rect.width)x=ev.clientX-rect.left-330;
+      if(y+200>rect.height)y=ev.clientY-rect.top-200;
+      tooltip.style.left=x+'px';tooltip.style.top=y+'px';
+    })
+    .on('mouseleave',()=>tooltip.style.display='none')
+    .on('click',(ev,d)=>{const iso=idToISO[d.id];if(iso&&hasData(iso))handleCountryInteraction(iso,ev.currentTarget,false);})
+    .on('dblclick',(ev,d)=>{ev.preventDefault();ev.stopPropagation();const iso=idToISO[d.id];if(iso&&hasData(iso))handleCountryInteraction(iso,ev.currentTarget,true);});
+
+  // Small country circle markers
+  Object.entries(SMALL_COUNTRIES_GLOBAL).forEach(([iso,[lat,lon]])=>{
+    if(!DATA[iso]&&!FOOD_DATA[iso]&&!POLITICS_DATA[iso]&&!MOVIES_DATA[iso]&&!LANGUAGES_DATA[iso]&&!BUSINESS_DATA[iso])return;
+    const col=getSmallMarkerColor(iso);
+    const [x,y]=projection([lon,lat]);
+    if(isNaN(x)||isNaN(y))return;
+    g.append('circle').attr('class','small-marker country')
+      .attr('data-iso',iso).attr('cx',x).attr('cy',y).attr('r',5)
+      .attr('fill',col).attr('stroke','#fff').attr('stroke-width',1.5)
+      .style('cursor','pointer').style('filter','drop-shadow(0 0 3px rgba(0,0,0,.5))')
+      .on('mousemove',ev=>{
+        if(panel.classList.contains('open'))return;
+        const html=buildTooltipHTML(iso);
+        if(!html){tooltip.style.display='none';return;}
+        tooltip.innerHTML=html;tooltip.style.display='block';
+        const rect=document.getElementById('map-container').getBoundingClientRect();
+        let tx=ev.clientX-rect.left+15,ty=ev.clientY-rect.top+15;
+        tooltip.style.left=tx+'px';tooltip.style.top=ty+'px';
+      })
+      .on('mouseleave',()=>tooltip.style.display='none')
+      .on('click',ev=>{if(hasData(iso))handleCountryInteraction(iso,ev.currentTarget,false);})
+      .on('dblclick',ev=>{ev.preventDefault();ev.stopPropagation();if(hasData(iso))handleCountryInteraction(iso,ev.currentTarget,true);});
+  });
+
+  resize();window.addEventListener('resize',resize);
+});
+// keydown handler moved to bottom
+
+// ── Language switching ──
+function applyLanguage(lang){
+  currentLang=lang;
+  localStorage.setItem('religion-map-lang',lang);
+  document.querySelectorAll('#lang-switcher button').forEach(b=>{
+    b.classList.toggle('active',b.dataset.lang===lang);
+  });
+  document.querySelectorAll('[data-i18n]').forEach(el=>{
+    const key=el.dataset.i18n;
+    if(i18n[lang]&&i18n[lang][key])el.textContent=i18n[lang][key];
+  });
+  buildLegend();
+  buildStats();
+  closePanel();
+}
+document.querySelectorAll('#lang-switcher button').forEach(btn=>{
+  btn.addEventListener('click',()=>applyLanguage(btn.dataset.lang));
+});
+
+// ── Deeplink: make food/movie names clickable in panel ──
+const DEEPLINK_URLS = {
+  menuLiteracy: 'https://menu-literacy.vercel.app',
+  moviePortal: 'https://movie-portal-blue.vercel.app',
+  culturemap: 'https://world-culture-map.vercel.app'
+};
+
+// Country name to ISO mapping for reverse links
+const COUNTRY_NAME_TO_ISO = {};
+Object.entries(DATA).forEach(([iso, d]) => { if(d.n) COUNTRY_NAME_TO_ISO[d.n] = iso; });
+Object.entries(PROFILE).forEach(([iso, d]) => { if(d.e) COUNTRY_NAME_TO_ISO[d.e] = iso; });
+
+// Override buildPanelFood to add deeplinks
+const _origBuildPanelFood = buildPanelFood;
+buildPanelFood = function(iso) {
+  const fd = FOOD_DATA[iso];
+  if(!fd) return _origBuildPanelFood(iso);
+  let html = `<div class="panel-section"><h3>${t('food_dishTitle')}</h3>`;
+  fd.dishes.forEach(d => {
+    const dn = currentLang==='en'? d.en : (currentLang==='ja'? d.ja : d.ko);
+    const enName = currentLang==='en'? '' : `<div class="dish-name-en">${d.en}</div>`;
+    const wl = d.wiki ? ` <a href="${d.wiki}" target="_blank" rel="noopener" style="text-decoration:none;font-size:13px" title="Wikipedia">🔗</a>` : '';
+    const menuLink = `<a href="${DEEPLINK_URLS.menuLiteracy}?food=${encodeURIComponent(d.en)}" style="text-decoration:none;color:#6c63ff;font-size:11px;margin-left:6px" title="메뉴 리터러시에서 보기">📖</a>`;
+    html += `<div class="dish-card"><div class="dish-name">${dn}${wl}${menuLink}</div>${enName}<div class="dish-desc">${d.desc}</div><span class="dish-flavor">🍴 ${d.flavor}</span></div>`;
+  });
+  html += `</div>`;
+  return html;
+};
+
+// Override buildPanelMovies to add deeplinks
+const _origBuildPanelMovies = buildPanelMovies;
+buildPanelMovies = function(iso) {
+  const md = MOVIES_DATA[iso];
+  if(!md) return _origBuildPanelMovies(iso);
+  const mi = MOVIE_INDUSTRY[md.industry]||{c:'#666',en:md.industry,ja:md.industry};
+  const indLabel = currentLang==='ko'? md.industry : (currentLang==='ja'? (mi.ja||md.industry) : (mi.en||md.industry));
+  let html = `<div class="panel-section"><h3>🎬 ${indLabel}</h3><div class="religion-desc">${md.desc}</div></div>`;
+  html += `<div class="panel-section"><h3>${t('mov_movieTitle')}</h3>`;
+  md.movies.forEach(m => {
+    const mn = currentLang==='en'? m.en : (currentLang==='ja'? m.ja : m.ko);
+    const enName = currentLang==='en'? '' : `<div class="movie-title-en">${m.en}</div>`;
+    const wl = m.wiki ? ` <a href="${m.wiki}" target="_blank" rel="noopener" style="text-decoration:none;font-size:13px" title="Wikipedia">🔗</a>` : '';
+    const movieLink = `<a href="${DEEPLINK_URLS.moviePortal}?movie=${encodeURIComponent(m.ko)}" style="text-decoration:none;color:#a29bfe;font-size:11px;margin-left:6px" title="영화 포털에서 보기">🎬</a>`;
+    html += `<div class="movie-card"><div class="movie-title">${mn}${wl}${movieLink}</div>${enName}<div class="movie-meta">📅 ${m.year} · 🎬 ${m.director}</div></div>`;
+  });
+  html += `</div>`;
+  return html;
+};
+
+// ── Deeplink: receive URL parameters ──
+function handleDeeplink() {
+  const params = new URLSearchParams(window.location.search);
+  const countryISO = params.get('country');
+  const tab = params.get('tab');
+  if (!countryISO) return;
+  
+  // Wait for map to load
+  const tryOpen = () => {
+    const el = document.querySelector(`[data-iso="${countryISO}"]`);
+    if (!el) { setTimeout(tryOpen, 300); return; }
+    
+    // Switch tab if specified
+    if (tab && ['religion','food','politics','movies','languages','business'].includes(tab)) {
+      switchTab(tab);
+    }
+    
+    // Open panel
+    setTimeout(() => {
+      if (hasData(countryISO)) {
+        openPanel(countryISO, el);
+        // Switch panel inner tab
+        if (tab) {
+          setTimeout(() => {
+            const tabBtn = document.querySelector(`.panel-tab-btn[data-ptab="${tab}"]`);
+            if (tabBtn) tabBtn.click();
+          }, 200);
+        }
+        // Highlight with glow
+        el.style.filter = 'brightness(2) drop-shadow(0 0 8px #6c63ff)';
+        setTimeout(() => { el.style.filter = ''; }, 2500);
+      }
+    }, 200);
+  };
+  setTimeout(tryOpen, 500);
+}
+window.addEventListener('load', handleDeeplink);
+
+// ── Full-page country view ──
+const countryPage = document.getElementById('country-page');
+let countryPageOpen = false;
+
+function openCountryPage(iso) {
+  if (!hasData(iso)) return;
+  countryPageOpen = true;
+  closePanel();
+  
+  const prof = PROFILE[iso];
+  const info = DATA[iso];
+  const fd = FOOD_DATA[iso];
+  const pd = POLITICS_DATA[iso];
+  const md = MOVIES_DATA[iso];
+  const ld = LANGUAGES_DATA[iso];
+  const bd = BUSINESS_DATA[iso];
+  const rd = typeof REGION_DATA !== 'undefined' ? REGION_DATA[iso] : null;
+  
+  const flag = prof?.f || fd?.f || pd?.f || md?.f || ld?.f || bd?.f || '🏳️';
+  const name = currentLang==='en' ? (prof?.e||fd?.en||pd?.en||'') : (info?.n||fd?.n||pd?.n||'');
+  const enName = prof?.e || fd?.en || pd?.en || '';
+  
+  // Build nav items
+  const sections = [];
+  sections.push({id:'cp-overview',icon:'📊',label:{ko:'개요',en:'Overview',ja:'概要'}});
+  if(rd) sections.push({id:'cp-regions',icon:'🗺️',label:{ko:'지역',en:'Regions',ja:'地域'}});
+  if(info) sections.push({id:'cp-religion',icon:'🙏',label:{ko:'종교',en:'Religion',ja:'宗教'}});
+  if(pd) sections.push({id:'cp-politics',icon:'🏛️',label:{ko:'정치',en:'Politics',ja:'政治'}});
+  if(fd) sections.push({id:'cp-food',icon:'🍜',label:{ko:'음식',en:'Food',ja:'料理'}});
+  if(md) sections.push({id:'cp-movies',icon:'🎬',label:{ko:'영화',en:'Movies',ja:'映画'}});
+  if(bd) sections.push({id:'cp-business',icon:'💼',label:{ko:'비즈니스',en:'Business',ja:'ビジネス'}});
+  if(ld) sections.push({id:'cp-languages',icon:'🗣️',label:{ko:'언어',en:'Language',ja:'言語'}});
+  
+  let html = '';
+  
+  // Header
+  html += `<div class="cp-header"><div class="cp-flag">${flag}</div>`;
+  html += `<div class="cp-name">${name}</div>`;
+  if(currentLang!=='en') html += `<div class="cp-name-en">${enName}</div>`;
+  if(prof) {
+    html += `<div class="cp-basic-info">`;
+    html += `<div class="cp-basic-item"><div class="cp-basic-label">${t('capital')}</div><div class="cp-basic-value">${prof.c}</div></div>`;
+    html += `<div class="cp-basic-item"><div class="cp-basic-label">${t('population')}</div><div class="cp-basic-value">${prof.p}</div></div>`;
+    html += `<div class="cp-basic-item"><div class="cp-basic-label">${t('continent')}</div><div class="cp-basic-value">${prof.g}</div></div>`;
+    html += `<div class="cp-basic-item"><div class="cp-basic-label">${t('language')}</div><div class="cp-basic-value">${prof.l}</div></div>`;
+    html += `</div>`;
+  }
+  html += `</div>`;
+  
+  // Nav
+  html += `<div class="cp-nav">`;
+  sections.forEach(s => {
+    const label = s.label[currentLang] || s.label.en;
+    html += `<button class="cp-nav-btn" onclick="cpScrollTo('${s.id}')">${s.icon} ${label}</button>`;
+  });
+  html += `</div>`;
+  
+  // Content
+  html += `<div class="cp-content">`;
+  
+  // Overview section
+  html += `<div class="cp-section" id="cp-overview"><div class="cp-section-title">📊 ${currentLang==='en'?'Overview':currentLang==='ja'?'概要':'개요'}</div>`;
+  if(prof?.desc) html += `<div class="religion-desc" style="margin-bottom:16px">${prof.desc}</div>`;
+  let overviewCards = [];
+  if(info?.r?.length) {
+    const top = info.r[0];
+    overviewCards.push({icon:rc(top.n).icon, label:currentLang==='en'?'Main Religion':currentLang==='ja'?'主要宗教':'주요 종교', value:`${rn(top.n)} ${top.p}%`});
+  }
+  if(pd) {
+    const gt = GOV_TYPES[pd.gov]||{icon:'🏛️',en:pd.gov,ja:pd.gov};
+    overviewCards.push({icon:gt.icon, label:currentLang==='en'?'Government':currentLang==='ja'?'政治体制':'정치체제', value:currentLang==='ko'?pd.gov:(currentLang==='ja'?(gt.ja||pd.gov):(gt.en||pd.gov))});
+    overviewCards.push({icon:'👤', label:currentLang==='en'?'Leader':currentLang==='ja'?'指導者':'지도자', value:pd.leader});
+  }
+  if(ld) {
+    overviewCards.push({icon:'💬', label:currentLang==='en'?'Greeting':currentLang==='ja'?'挨拶':'인사말', value:ld.greeting});
+    overviewCards.push({icon:'🗣️', label:currentLang==='en'?'Official Language':currentLang==='ja'?'公用語':'공용어', value:ld.official});
+  }
+  if(bd?.companies?.[0]) {
+    const cn = currentLang==='en'?bd.companies[0].en:(currentLang==='ja'?bd.companies[0].ja:bd.companies[0].ko);
+    overviewCards.push({icon:'💼', label:currentLang==='en'?'Top Company':currentLang==='ja'?'代表企業':'대표 기업', value:cn});
+  }
+  if(fd?.dishes?.[0]) {
+    const dn = currentLang==='en'?fd.dishes[0].en:(currentLang==='ja'?fd.dishes[0].ja:fd.dishes[0].ko);
+    overviewCards.push({icon:'🍜', label:currentLang==='en'?'Famous Food':currentLang==='ja'?'代表料理':'대표 음식', value:dn});
+  }
+  if(md?.movies?.[0]) {
+    const mn = currentLang==='en'?md.movies[0].en:(currentLang==='ja'?md.movies[0].ja:md.movies[0].ko);
+    overviewCards.push({icon:'🎬', label:currentLang==='en'?'Famous Film':currentLang==='ja'?'代表映画':'대표 영화', value:mn});
+  }
+  html += `<div class="cp-cards-grid">`;
+  overviewCards.forEach(c => {
+    html += `<div class="cp-card"><div class="cp-card-sub">${c.icon} ${c.label}</div><div class="cp-card-title" style="margin-top:4px">${c.value}</div></div>`;
+  });
+  html += `</div></div>`;
+  
+  // Regions section
+  if(rd) {
+    html += `<div class="cp-section" id="cp-regions"><div class="cp-section-title">🗺️ ${currentLang==='en'?'Regions & Cities':currentLang==='ja'?'地域と都市':'지역 & 도시'}</div>`;
+    html += `<div class="cp-region-map" id="cp-region-map-container"></div>`;
+    html += `<div class="cp-cards-grid" style="margin-top:16px">`;
+    rd.regions.forEach(r => {
+      const rname = currentLang==='en'?r.en:(currentLang==='ja'?r.ja:r.name);
+      const typeLabel = r.type==='capital'?(currentLang==='en'?'Capital':currentLang==='ja'?'首都':'수도'):(r.type==='city'?(currentLang==='en'?'City':currentLang==='ja'?'都市':'도시'):(currentLang==='en'?'Region':currentLang==='ja'?'地域':'지역'));
+      html += `<div class="cp-card"><div class="cp-card-title">${r.icon} ${rname}</div><div class="cp-card-sub">${typeLabel}</div><div class="cp-card-desc">${r.desc}</div></div>`;
+    });
+    html += `</div></div>`;
+  }
+  
+  // Religion section
+  if(info) {
+    html += `<div class="cp-section" id="cp-religion"><div class="cp-section-title">🙏 ${currentLang==='en'?'Religion':currentLang==='ja'?'宗教':'종교'}</div>`;
+    const sorted = [...info.r].sort((a,b)=>b.p-a.p);
+    const donutSvg = buildDonutSVG(sorted, 180, 72, 46);
+    html += `<div class="cp-donut-wrap">${donutSvg}<div style="flex:1;min-width:200px">`;
+    sorted.forEach(rel => {
+      const rm = rc(rel.n);
+      html += `<div class="p-hbar"><div class="p-hbar-label"><span><span class="p-hbar-icon">${rm.icon}</span> ${rn(rel.n)}</span><span>${rel.p}%</span></div><div class="p-hbar-track"><div class="p-hbar-fill" style="width:${rel.p}%;background:${rm.c}"></div></div></div>`;
+    });
+    html += `</div></div>`;
+    if(prof) {
+      const rfMap = {free:{t:t('rfFree'),cls:'tag-free'},partial:{t:t('rfPartial'),cls:'tag-partial'},restricted:{t:t('rfRestricted'),cls:'tag-restricted'}};
+      const rf = rfMap[prof.rf]||rfMap.free;
+      html += `<div style="margin-top:16px"><span class="tag ${rf.cls}">${rf.t}</span>`;
+      if(prof.sr) html += `<span class="tag tag-state">${t('stateReligion')} ${prof.sr}</span>`;
+      html += `</div>`;
+    }
+    html += `</div>`;
+  }
+  
+  // Politics section
+  if(pd) {
+    const gt = GOV_TYPES[pd.gov]||{icon:'🏛️',c:'#666',en:pd.gov,ja:pd.gov};
+    const govLabel = currentLang==='ko'?pd.gov:(currentLang==='ja'?(gt.ja||pd.gov):(gt.en||pd.gov));
+    html += `<div class="cp-section" id="cp-politics"><div class="cp-section-title">🏛️ ${currentLang==='en'?'Politics':currentLang==='ja'?'政治':'정치'}</div>`;
+    html += `<div class="info-grid" style="max-width:500px">`;
+    html += `<div class="info-item" style="grid-column:1/-1"><div class="info-label">${t('pol_govType')}</div><div class="info-value">${gt.icon} ${govLabel}</div></div>`;
+    const wl = pd.wiki ? ` <a href="${pd.wiki}" target="_blank" rel="noopener" style="text-decoration:none" title="Wikipedia">🔗</a>` : '';
+    html += `<div class="info-item" style="grid-column:1/-1"><div class="info-label">${t('pol_leaderLabel')}</div><div class="info-value" style="font-size:13px">${pd.leader}${wl}</div></div>`;
+    html += `</div>`;
+    html += `<div style="margin-top:14px"><div class="info-label" style="margin-bottom:8px">${t('pol_partiesLabel')}</div>`;
+    pd.parties.forEach(p => html += `<span class="party-tag">${p}</span>`);
+    html += `</div></div>`;
+  }
+  
+  // Food section
+  if(fd) {
+    html += `<div class="cp-section" id="cp-food"><div class="cp-section-title">🍜 ${currentLang==='en'?'Food':currentLang==='ja'?'料理':'음식'}</div>`;
+    html += `<div class="cp-cards-grid">`;
+    fd.dishes.forEach(d => {
+      const dn = currentLang==='en'?d.en:(currentLang==='ja'?d.ja:d.ko);
+      const enN = currentLang==='en'?'':d.en;
+      const menuLink = `<a href="${DEEPLINK_URLS.menuLiteracy}?food=${encodeURIComponent(d.en)}" style="text-decoration:none;color:#6c63ff;font-size:11px;margin-left:6px" title="Menu Literacy">📖</a>`;
+      html += `<div class="cp-card"><div class="cp-card-title">${dn}${menuLink}</div>${enN?`<div class="cp-card-sub">${enN}</div>`:''}
+        <div class="cp-card-desc">${d.desc}</div><div class="cp-card-tag">🍴 ${d.flavor}</div></div>`;
+    });
+    html += `</div></div>`;
+  }
+  
+  // Movies section
+  if(md) {
+    const mi = MOVIE_INDUSTRY[md.industry]||{en:md.industry,ja:md.industry};
+    const indLabel = currentLang==='ko'?md.industry:(currentLang==='ja'?(mi.ja||md.industry):(mi.en||md.industry));
+    html += `<div class="cp-section" id="cp-movies"><div class="cp-section-title">🎬 ${currentLang==='en'?'Movies':currentLang==='ja'?'映画':'영화'} · ${indLabel}</div>`;
+    html += `<div class="religion-desc" style="margin-bottom:16px">${md.desc}</div>`;
+    html += `<div class="cp-cards-grid">`;
+    md.movies.forEach(m => {
+      const mn = currentLang==='en'?m.en:(currentLang==='ja'?m.ja:m.ko);
+      const enN = currentLang==='en'?'':m.en;
+      const movieLink = `<a href="${DEEPLINK_URLS.moviePortal}?movie=${encodeURIComponent(m.ko)}" style="text-decoration:none;color:#a29bfe;font-size:11px;margin-left:6px" title="Movie Portal">🎬</a>`;
+      html += `<div class="cp-card"><div class="cp-card-title">${mn}${movieLink}</div>${enN?`<div class="cp-card-sub">${enN}</div>`:''}
+        <div class="cp-card-desc">📅 ${m.year} · 🎬 ${m.director}</div></div>`;
+    });
+    html += `</div></div>`;
+  }
+  
+  // Business section
+  if(bd) {
+    const bi = BIZ_INDUSTRIES[bd.industry]||{icon:'🏢',en:bd.industry,ja:bd.industry};
+    const indLabel = currentLang==='ko'?bd.industry:(currentLang==='ja'?(bi.ja||bd.industry):(bi.en||bd.industry));
+    html += `<div class="cp-section" id="cp-business"><div class="cp-section-title">💼 ${currentLang==='en'?'Business':currentLang==='ja'?'ビジネス':'비즈니스'} · ${bi.icon} ${indLabel}</div>`;
+    html += `<div class="cp-cards-grid">`;
+    bd.companies.forEach(c => {
+      const cn = currentLang==='en'?c.en:(currentLang==='ja'?c.ja:c.ko);
+      const enN = currentLang==='en'?'':c.en;
+      const ci = BIZ_INDUSTRIES[c.industry]||{icon:'🏢'};
+      const wl = c.wiki ? ` <a href="${c.wiki}" target="_blank" rel="noopener" style="text-decoration:none;font-size:12px">🔗</a>` : '';
+      html += `<div class="cp-card"><div class="cp-card-title">${cn}${wl}</div>${enN?`<div class="cp-card-sub">${enN}</div>`:''}
+        <div class="cp-card-desc">${c.desc}</div><div class="cp-card-tag">${ci.icon} ${currentLang==='ko'?c.industry:(currentLang==='ja'?(ci.ja||c.industry):(ci.en||c.industry))}</div></div>`;
+    });
+    html += `</div></div>`;
+  }
+  
+  // Languages section
+  if(ld) {
+    const lf = LANG_FAMILIES[ld.family]||{icon:'🌐',en:ld.family,ja:ld.family};
+    const famLabel = currentLang==='ko'?ld.family:(currentLang==='ja'?(lf.ja||ld.family):(lf.en||ld.family));
+    html += `<div class="cp-section" id="cp-languages"><div class="cp-section-title">🗣️ ${currentLang==='en'?'Language':currentLang==='ja'?'言語':'언어'}</div>`;
+    html += `<div class="lang-greeting" style="font-size:32px">${ld.greeting}</div>`;
+    html += `<div class="info-grid" style="max-width:500px;margin-top:16px">`;
+    html += `<div class="info-item"><div class="info-label">${t('lang_officialLabel')}</div><div class="info-value">${ld.official}</div></div>`;
+    html += `<div class="info-item"><div class="info-label">${t('lang_familyLabel')}</div><div class="info-value">${lf.icon} ${famLabel}</div></div>`;
+    html += `</div>`;
+    html += `<div style="margin-top:14px"><div class="info-label" style="margin-bottom:8px">${t('lang_otherLangs')}</div><div class="lang-list">`;
+    ld.languages.forEach(l => html += `<span class="lang-tag">${l}</span>`);
+    html += `</div></div></div>`;
+  }
+  
+  html += `</div>`; // close cp-content
+  
+  countryPage.innerHTML = html;
+  countryPage.scrollTop = 0;
+  requestAnimationFrame(() => countryPage.classList.add('open'));
+  
+  // Update hash
+  history.pushState({iso}, '', `#country/${iso}`);
+  
+  // Render region map if exists
+  if(rd) setTimeout(() => renderRegionMap(iso, rd), 100);
+}
+
+function closeCountryPage() {
+  countryPage.classList.remove('open');
+  countryPageOpen = false;
+  if(location.hash.startsWith('#country/')) history.pushState({}, '', location.pathname + location.search);
+}
+
+function cpScrollTo(id) {
+  const el = document.getElementById(id);
+  if(el) el.scrollIntoView({behavior:'smooth', block:'start'});
+  // Update active nav
+  document.querySelectorAll('.cp-nav-btn').forEach(b => b.classList.remove('active'));
+  event?.target?.classList?.add('active');
+}
+
+// Intersection observer for nav highlighting
+function setupNavObserver() {
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if(e.isIntersecting) {
+        document.querySelectorAll('.cp-nav-btn').forEach(b => {
+          b.classList.toggle('active', b.getAttribute('onclick')?.includes(e.target.id));
+        });
+      }
+    });
+  }, {threshold: 0.3, root: countryPage});
+  countryPage.querySelectorAll('.cp-section').forEach(s => observer.observe(s));
+}
+
+// Region map renderer
+function renderRegionMap(iso, rd) {
+  const container = document.getElementById('cp-region-map-container');
+  if(!container) return;
+  
+  const width = container.clientWidth || 500;
+  const height = Math.min(width * 0.7, 400);
+  const padding = 30;
+
+  // Find country feature from global data
+  let countryFeature = null;
+  if(globalCountries) {
+    countryFeature = globalCountries.features.find(f => {
+      const fiso = idToISO[f.id] || (f.properties && f.properties.ISO_A3);
+      return fiso === iso;
+    });
+  }
+
+  // Create SVG element with d3
+  container.innerHTML = '';
+  const svgEl = d3.select(container).append('svg')
+    .attr('width', width).attr('height', height)
+    .attr('viewBox', `0 0 ${width} ${height}`);
+
+  // Background
+  svgEl.append('rect').attr('width', width).attr('height', height)
+    .attr('fill', 'rgba(255,255,255,.02)').attr('rx', 16);
+
+  if(countryFeature) {
+    // Use d3 projection fitted to country shape
+    const projection = d3.geoMercator()
+      .fitExtent([[padding, padding], [width - padding, height - padding]], countryFeature);
+    const pathGen = d3.geoPath().projection(projection);
+
+    // Draw country shape
+    svgEl.append('path')
+      .datum(countryFeature)
+      .attr('d', pathGen)
+      .attr('fill', 'rgba(74,144,217,.12)')
+      .attr('stroke', 'rgba(74,144,217,.4)')
+      .attr('stroke-width', 1.5);
+
+    // Connection lines from capital
+    const capital = rd.regions.find(r => r.type === 'capital');
+    if(capital) {
+      rd.regions.forEach(r => {
+        if(r.type !== 'capital') {
+          const [x1,y1] = projection([capital.lon, capital.lat]);
+          const [x2,y2] = projection([r.lon, r.lat]);
+          svgEl.append('line')
+            .attr('x1',x1).attr('y1',y1).attr('x2',x2).attr('y2',y2)
+            .attr('stroke','rgba(74,144,217,.15)').attr('stroke-width',1).attr('stroke-dasharray','3,3');
+        }
+      });
+    }
+
+    // Markers
+    rd.regions.forEach((r, i) => {
+      const [x, y] = projection([r.lon, r.lat]);
+      const isCapital = r.type === 'capital';
+      const radius = isCapital ? 8 : 6;
+      const color = isCapital ? '#e74c3c' : (r.type==='city' ? '#3498db' : '#2ecc71');
+      svgEl.append('circle').attr('cx',x).attr('cy',y).attr('r',radius)
+        .attr('fill',color).attr('stroke','#fff').attr('stroke-width',1.5).attr('opacity',0.9);
+      svgEl.append('text').attr('x',x).attr('y',y-12).attr('text-anchor','middle')
+        .attr('fill','#fff').attr('font-size',16).text(r.icon);
+      const rname = currentLang==='en'?r.en:(currentLang==='ja'?r.ja:r.name);
+      svgEl.append('text').attr('x',x).attr('y',y+radius+14).attr('text-anchor','middle')
+        .attr('fill','#ccc').attr('font-size',10).attr('font-weight',500).text(rname);
+    });
+  } else {
+    // Fallback: use bounds-based rendering if no country feature found
+    const bounds = rd.bounds;
+    const latRange = bounds[1][0] - bounds[0][0];
+    const lonRange = bounds[1][1] - bounds[0][1];
+    function toX(lon) { return padding + (lon - bounds[0][1]) / lonRange * (width - 2*padding); }
+    function toY(lat) { return padding + (bounds[1][0] - lat) / latRange * (height - 2*padding); }
+    
+    const capital = rd.regions.find(r => r.type === 'capital');
+    if(capital) {
+      rd.regions.forEach(r => {
+        if(r.type !== 'capital') {
+          svgEl.append('line').attr('x1',toX(capital.lon)).attr('y1',toY(capital.lat))
+            .attr('x2',toX(r.lon)).attr('y2',toY(r.lat))
+            .attr('stroke','rgba(74,144,217,.15)').attr('stroke-width',1).attr('stroke-dasharray','3,3');
+        }
+      });
+    }
+    rd.regions.forEach((r, i) => {
+      const x = toX(r.lon), y = toY(r.lat);
+      const isCapital = r.type === 'capital';
+      const radius = isCapital ? 8 : 6;
+      const color = isCapital ? '#e74c3c' : (r.type==='city' ? '#3498db' : '#2ecc71');
+      svgEl.append('circle').attr('cx',x).attr('cy',y).attr('r',radius)
+        .attr('fill',color).attr('stroke','#fff').attr('stroke-width',1.5).attr('opacity',0.9);
+      svgEl.append('text').attr('x',x).attr('y',y-12).attr('text-anchor','middle')
+        .attr('fill','#fff').attr('font-size',16).text(r.icon);
+      const rname = currentLang==='en'?r.en:(currentLang==='ja'?r.ja:r.name);
+      svgEl.append('text').attr('x',x).attr('y',y+radius+14).attr('text-anchor','middle')
+        .attr('fill','#ccc').attr('font-size',10).attr('font-weight',500).text(rname);
+    });
+  }
+}
+
+// ── Double-click handler for map countries ──
+let clickTimer = null;
+
+function handleCountryInteraction(iso, el, isDoubleClick) {
+  if(isDoubleClick) {
+    if(clickTimer) { clearTimeout(clickTimer); clickTimer = null; }
+    openCountryPage(iso);
+  } else {
+    clickTimer = setTimeout(() => {
+      clickTimer = null;
+      if(hasData(iso)) openPanel(iso, el);
+    }, 250);
+  }
+}
+
+// ── Hash routing ──
+function handleHashRoute() {
+  const hash = location.hash;
+  if(hash.startsWith('#country/')) {
+    const iso = hash.replace('#country/', '').split('/')[0];
+    if(iso && hasData(iso)) {
+      // Wait for map load
+      const tryOpen = () => {
+        if(document.querySelector('[data-iso]')) {
+          openCountryPage(iso);
+          // Check for section
+          const section = hash.split('/')[2];
+          if(section) setTimeout(() => cpScrollTo('cp-' + section), 500);
+        } else setTimeout(tryOpen, 200);
+      };
+      setTimeout(tryOpen, 300);
+    }
+  }
+}
+
+window.addEventListener('popstate', (e) => {
+  if(countryPageOpen) closeCountryPage();
+  else if(e.state?.iso) openCountryPage(e.state.iso);
+});
+
+// ── Override deeplink handler to also support hash + full page ──
+const _origHandleDeeplink = handleDeeplink;
+window.removeEventListener('load', _origHandleDeeplink);
+
+function handleDeeplinkV2() {
+  const params = new URLSearchParams(window.location.search);
+  const countryISO = params.get('country');
+  const tab = params.get('tab');
+  
+  if(location.hash.startsWith('#country/')) {
+    handleHashRoute();
+    return;
+  }
+  
+  if(!countryISO) return;
+  
+  const tryOpen = () => {
+    const el = document.querySelector(`[data-iso="${countryISO}"]`);
+    if(!el) { setTimeout(tryOpen, 300); return; }
+    if(tab) switchTab(tab === 'food' ? 'food' : tab === 'movies' ? 'movies' : tab);
+    setTimeout(() => {
+      // If tab specified, open full page and scroll to section
+      openCountryPage(countryISO);
+      if(tab) {
+        const sectionMap = {food:'cp-food',movies:'cp-movies',religion:'cp-religion',politics:'cp-politics',business:'cp-business',languages:'cp-languages'};
+        const sid = sectionMap[tab];
+        if(sid) setTimeout(() => cpScrollTo(sid), 500);
+      }
+    }, 300);
+  };
+  setTimeout(tryOpen, 500);
+}
+window.addEventListener('load', handleDeeplinkV2);
+
+// Escape key
+document.addEventListener('keydown', e => {
+  if(e.key === 'Escape') {
+    if(countryPageOpen) closeCountryPage();
+    else closePanel();
+  }
+});
+
+// Init
+buildLegend();
+buildStats();
+applyLanguage(currentLang);
+</script>
+</body>
+</html>
