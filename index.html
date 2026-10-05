@@ -195,6 +195,10 @@ footer{text-align:center;padding:5px;font-size:10px;color:#444;flex-shrink:0}
   .tab-icon{font-size:12px}
   #tabs{gap:1px;padding:2px 4px 0}
 }
+.pub-sources{font-size:11px;color:#777;margin-top:10px;line-height:1.7}
+.pub-sources a{color:#8ab4f8;text-decoration:none}
+.pub-sources a:hover{text-decoration:underline}
+.pub-value{font-size:12px;font-weight:400;line-height:1.5;color:#ddd}
 </style>
 </head>
 <body>
@@ -971,7 +975,8 @@ let panelActiveTab = 'overview';
 
 function openUnifiedPanel(iso,el){
   // Check if any data exists
-  const hasAny = DATA[iso] || FOOD_DATA[iso] || POLITICS_DATA[iso] || MOVIES_DATA[iso] || LANGUAGES_DATA[iso] || BUSINESS_DATA[iso] || PROFILE[iso];
+  const pub = PUBLIC_BY_ISO3[iso];
+  const hasAny = DATA[iso] || FOOD_DATA[iso] || POLITICS_DATA[iso] || MOVIES_DATA[iso] || LANGUAGES_DATA[iso] || BUSINESS_DATA[iso] || PROFILE[iso] || pub;
   if(!hasAny) return;
   showPanel(el);
   
@@ -984,9 +989,9 @@ function openUnifiedPanel(iso,el){
   const bd = BUSINESS_DATA[iso];
   
   // Determine name and flag
-  const flag = prof?.f || fd?.f || pd?.f || md?.f || ld?.f || bd?.f || '🏳️';
-  const name = prof ? (currentLang==='en'? prof.e : info?.n || pd?.n || fd?.n || '?') : (info?.n || fd?.n || pd?.n || md?.n || ld?.n || bd?.n || '?');
-  const enName = prof?.e || fd?.en || pd?.en || md?.en || ld?.en || bd?.en || '';
+  const flag = prof?.f || fd?.f || pd?.f || md?.f || ld?.f || bd?.f || pub?.flag || '🏳️';
+  const name = prof ? (currentLang==='en'? prof.e : info?.n || pd?.n || fd?.n || '?') : (info?.n || fd?.n || pd?.n || md?.n || ld?.n || bd?.n || pubLabel(pub?.name) || '?');
+  const enName = prof?.e || fd?.en || pd?.en || md?.en || ld?.en || bd?.en || pub?.name?.en || '';
   
   // Build tab list
   const tabs = [];
@@ -1053,6 +1058,14 @@ function buildPanelOverview(iso){
       <div class="info-item"><div class="info-label">${t('language')}</div><div class="info-value" style="font-size:${prof.l.length>20?'11px':'13px'}">${prof.l}</div></div>
     </div></div>`;
     if(prof.desc) html += `<div class="panel-section"><div class="religion-desc">${prof.desc}</div></div>`;
+  } else if(PUBLIC_BY_ISO3[iso]){
+    const e = PUBLIC_BY_ISO3[iso];
+    html += `<div class="panel-section"><h3>📊 ${currentLang==='en'?'Basic Info':currentLang==='ja'?'基本情報':'기본 정보'}</h3><div class="info-grid">
+      <div class="info-item"><div class="info-label">${t('capital')}</div><div class="info-value">${pubEsc(pubLabel(e.capital))||'-'}</div></div>
+      <div class="info-item"><div class="info-label">${t('population')}</div><div class="info-value">${e.population?pubPop(e.population.value):'-'}</div></div>
+      <div class="info-item"><div class="info-label">${t('continent')}</div><div class="info-value">${pubEsc(pubList(e.continent).join(', '))||'-'}</div></div>
+      <div class="info-item"><div class="info-label">${t('language')}</div><div class="info-value" style="font-size:11px">${pubEsc(pubList(e.official_languages).slice(0,4).join(', '))||'-'}</div></div>
+    </div></div>`;
   }
   // Quick summary of available data
   const fd = FOOD_DATA[iso], pd = POLITICS_DATA[iso], md = MOVIES_DATA[iso], bd = BUSINESS_DATA[iso];
@@ -1088,6 +1101,7 @@ function buildPanelOverview(iso){
   if(summaryItems.length) {
     html += `<div class="panel-section"><h3>🌐 ${currentLang==='en'?'At a Glance':currentLang==='ja'?'概要':'한눈에 보기'}</h3><div class="info-grid">${summaryItems.join('')}</div></div>`;
   }
+  html += buildPublicPanelHTML(iso);
   return html;
 }
 
@@ -1272,7 +1286,7 @@ function closePanel(){
 }
 
 function hasData(iso){
-  return !!(DATA[iso] || FOOD_DATA[iso] || POLITICS_DATA[iso] || MOVIES_DATA[iso] || LANGUAGES_DATA[iso] || BUSINESS_DATA[iso] || PROFILE[iso]);
+  return !!(DATA[iso] || FOOD_DATA[iso] || POLITICS_DATA[iso] || MOVIES_DATA[iso] || LANGUAGES_DATA[iso] || BUSINESS_DATA[iso] || PROFILE[iso] || PUBLIC_BY_ISO3[iso]);
 }
 
 function resize(){
@@ -1371,6 +1385,87 @@ const idToISO={
 "548":"VUT","862":"VEN","704":"VNM","887":"YEM","894":"ZMB","716":"ZWE","275":"PSE","-99":"XKX",
 "580":"MNP","304":"GRL","540":"NCL","583":"FSM","882":"WSM","776":"TON","296":"KIR"
 };
+
+// ── Public data: data/countries.json (Wikidata CC0 + CIA World Factbook + Natural Earth) ──
+// Built by data/build_public.py. Loaded with fetch, so it is skipped silently on file://;
+// everything below falls back to the hand-curated tables when it is absent.
+const PUBLIC_BY_ISO3 = {};
+let PUBLIC_META = null;
+fetch('data/countries.json').then(r => r.ok ? r.json() : null).then(j => {
+  if(!j || !j.countries) return;
+  PUBLIC_META = j._meta;
+  Object.values(j.countries).forEach(e => { if(e.iso3) PUBLIC_BY_ISO3[e.iso3] = e; });
+}).catch(() => {});
+
+function pubLabel(x){ if(!x) return ''; if(typeof x === 'string') return x; return x[currentLang] || x.en || x.ko || x.ja || ''; }
+function pubList(arr){ return (arr || []).map(x => x[currentLang] || x.en || x.ko || x.ja || '').filter(Boolean); }
+function pubPop(n){
+  if(!n) return '';
+  if(currentLang === 'en') return n.toLocaleString('en-US');
+  const u8 = currentLang === 'ja' ? '億' : '억', u4 = currentLang === 'ja' ? '万' : '만';
+  if(n >= 1e8) return (n / 1e8).toFixed(2).replace(/\.?0+$/, '') + u8;
+  if(n >= 1e4) return Math.round(n / 1e4).toLocaleString() + u4;
+  return n.toLocaleString();
+}
+function pubEsc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function pubSrcTitle(e, field){
+  const list = (e.sources || {})[field];
+  if(!list || !list.length) return '';
+  return list.map(s => `${s.source} (${s.retrieved})`).join(', ');
+}
+// Cards for one country: [{icon,label,value,field}] in the current UI language
+function buildPublicCards(iso){
+  const e = PUBLIC_BY_ISO3[iso];
+  if(!e) return [];
+  const L = (ko, en, ja) => currentLang === 'en' ? en : currentLang === 'ja' ? ja : ko;
+  const cards = [];
+  if(e.capital) cards.push({icon:'🏛️', field:'capital', label:L('수도','Capital','首都'), value:pubEsc(pubLabel(e.capital))});
+  if(e.population) cards.push({icon:'👥', field:'population', label:L('인구','Population','人口'), value:`${pubPop(e.population.value)} <span style="color:#777">(${e.population.as_of || ''})</span>`});
+  if(e.currency && e.currency.length) cards.push({icon:'💱', field:'currency', label:L('통화','Currency','通貨'), value:pubEsc(pubList(e.currency).join(', '))});
+  const gov = [];
+  if(e.government_form && e.government_form.length) gov.push(pubEsc(pubList(e.government_form).join(', ')));
+  if(e.government_type) gov.push(`<span style="color:#999">Factbook: ${pubEsc(e.government_type)}</span>`);
+  if(gov.length) cards.push({icon:'🏛️', field:e.government_form ? 'government_form' : 'government_type', label:L('정부 형태','Form of government','政体'), value:gov.join('<br>')});
+  if(e.head_of_state && e.head_of_state.length) cards.push({icon:'👑', field:'head_of_state', label:L('국가원수','Head of state','国家元首'), value:pubEsc(pubList(e.head_of_state).join(', '))});
+  if(e.head_of_government && e.head_of_government.length) cards.push({icon:'👤', field:'head_of_government', label:L('정부수반','Head of government','政府首脳'), value:pubEsc(pubList(e.head_of_government).join(', '))});
+  if(e.official_languages && e.official_languages.length){
+    const langs = e.official_languages.map(x => {
+      const n = x[currentLang] || x.en || '';
+      return x.native && x.native !== n ? `${n} (${x.native})` : n;
+    }).filter(Boolean);
+    const shown = langs.slice(0, 6).map(pubEsc).join(', ') + (langs.length > 6 ? ` <span style="color:#777">+${langs.length - 6}</span>` : '');
+    cards.push({icon:'🗣️', field:'official_languages', label:L('공용어','Official languages','公用語'), value:shown});
+  }
+  if(e.religions_text) cards.push({icon:'🙏', field:'religions_text', label:L('종교 구성','Religions','宗教構成'), value:pubEsc(e.religions_text)});
+  if(e.ethnic_groups_text) cards.push({icon:'🧑‍🤝‍🧑', field:'ethnic_groups_text', label:L('민족 구성','Ethnic groups','民族構成'), value:pubEsc(e.ethnic_groups_text)});
+  if(e.languages_text) cards.push({icon:'💬', field:'languages_text', label:L('사용 언어','Languages','言語'), value:pubEsc(e.languages_text)});
+  if(e.legal_system) cards.push({icon:'⚖️', field:'legal_system', label:L('법체계','Legal system','法体系'), value:pubEsc(e.legal_system)});
+  return cards;
+}
+// "Sources" line: distinct sources used for this country, with retrieval dates
+function buildSourcesHTML(iso){
+  const e = PUBLIC_BY_ISO3[iso];
+  if(!e || !e.sources) return '';
+  const seen = new Map();
+  Object.values(e.sources).forEach(list => (list || []).forEach(s => { if(!seen.has(s.source)) seen.set(s.source, s); }));
+  if(!seen.size) return '';
+  const label = currentLang === 'en' ? 'Sources' : currentLang === 'ja' ? '出典' : '출처';
+  const items = [...seen.values()].map(s => `<a href="${pubEsc(s.url)}" target="_blank" rel="noopener">${pubEsc(s.source)}</a> <span style="color:#555">${s.retrieved}</span>`);
+  const wd = e.qid ? ` · <a href="https://www.wikidata.org/wiki/${e.qid}" target="_blank" rel="noopener">${e.qid}</a>` : '';
+  return `<div class="pub-sources">${label}: ${items.join(' · ')}${wd}</div>`;
+}
+function buildPublicPanelHTML(iso){
+  const cards = buildPublicCards(iso);
+  if(!cards.length) return '';
+  const title = currentLang === 'en' ? 'Public data' : currentLang === 'ja' ? '公開データ' : '공공 데이터';
+  let html = `<div class="panel-section"><h3>🌐 ${title}</h3><div class="info-grid">`;
+  cards.forEach(c => {
+    const wide = c.value.length > 40 ? ' style="grid-column:1/-1"' : '';
+    html += `<div class="info-item"${wide} title="${pubEsc(pubSrcTitle(PUBLIC_BY_ISO3[iso], c.field))}"><div class="info-label">${c.icon} ${c.label}</div><div class="pub-value">${c.value}</div></div>`;
+  });
+  html += `</div>${buildSourcesHTML(iso)}</div>`;
+  return html;
+}
 
 let globalCountries = null;
 d3.json('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json').then(world=>{
@@ -1547,10 +1642,11 @@ function openCountryPage(iso) {
   const ld = LANGUAGES_DATA[iso];
   const bd = BUSINESS_DATA[iso];
   const rd = typeof REGION_DATA !== 'undefined' ? REGION_DATA[iso] : null;
+  const pub = PUBLIC_BY_ISO3[iso];
   
-  const flag = prof?.f || fd?.f || pd?.f || md?.f || ld?.f || bd?.f || '🏳️';
-  const name = currentLang==='en' ? (prof?.e||fd?.en||pd?.en||'') : (info?.n||fd?.n||pd?.n||'');
-  const enName = prof?.e || fd?.en || pd?.en || '';
+  const flag = prof?.f || fd?.f || pd?.f || md?.f || ld?.f || bd?.f || pub?.flag || '🏳️';
+  const name = currentLang==='en' ? (prof?.e||fd?.en||pd?.en||pub?.name?.en||'') : (info?.n||fd?.n||pd?.n||pubLabel(pub?.name)||'');
+  const enName = prof?.e || fd?.en || pd?.en || pub?.name?.en || '';
   
   // Build nav items
   const sections = [];
@@ -1562,6 +1658,7 @@ function openCountryPage(iso) {
   if(md) sections.push({id:'cp-movies',icon:'🎬',label:{ko:'영화',en:'Movies',ja:'映画'}});
   if(bd) sections.push({id:'cp-business',icon:'💼',label:{ko:'비즈니스',en:'Business',ja:'ビジネス'}});
   if(ld) sections.push({id:'cp-languages',icon:'🗣️',label:{ko:'언어',en:'Language',ja:'言語'}});
+  if(pub) sections.push({id:'cp-public',icon:'🌐',label:{ko:'공공 데이터',en:'Public data',ja:'公開データ'}});
   
   let html = '';
   
@@ -1575,6 +1672,13 @@ function openCountryPage(iso) {
     html += `<div class="cp-basic-item"><div class="cp-basic-label">${t('population')}</div><div class="cp-basic-value">${prof.p}</div></div>`;
     html += `<div class="cp-basic-item"><div class="cp-basic-label">${t('continent')}</div><div class="cp-basic-value">${prof.g}</div></div>`;
     html += `<div class="cp-basic-item"><div class="cp-basic-label">${t('language')}</div><div class="cp-basic-value">${prof.l}</div></div>`;
+    html += `</div>`;
+  } else if(pub) {
+    html += `<div class="cp-basic-info">`;
+    html += `<div class="cp-basic-item"><div class="cp-basic-label">${t('capital')}</div><div class="cp-basic-value">${pubEsc(pubLabel(pub.capital))||'-'}</div></div>`;
+    html += `<div class="cp-basic-item"><div class="cp-basic-label">${t('population')}</div><div class="cp-basic-value">${pub.population?pubPop(pub.population.value):'-'}</div></div>`;
+    html += `<div class="cp-basic-item"><div class="cp-basic-label">${t('continent')}</div><div class="cp-basic-value">${pubEsc(pubList(pub.continent).join(', '))||'-'}</div></div>`;
+    html += `<div class="cp-basic-item"><div class="cp-basic-label">${t('language')}</div><div class="cp-basic-value">${pubEsc(pubList(pub.official_languages).slice(0,4).join(', '))||'-'}</div></div>`;
     html += `</div>`;
   }
   html += `</div>`;
@@ -1735,6 +1839,17 @@ function openCountryPage(iso) {
     html += `<div style="margin-top:14px"><div class="info-label" style="margin-bottom:8px">${t('lang_otherLangs')}</div><div class="lang-list">`;
     ld.languages.forEach(l => html += `<span class="lang-tag">${l}</span>`);
     html += `</div></div></div>`;
+  }
+  
+  // Public data section (Wikidata + CIA World Factbook), with a Sources line
+  if(pub) {
+    const cards = buildPublicCards(iso);
+    html += `<div class="cp-section" id="cp-public"><div class="cp-section-title">🌐 ${currentLang==='en'?'Public data':currentLang==='ja'?'公開データ':'공공 데이터'}</div>`;
+    html += `<div class="cp-cards-grid">`;
+    cards.forEach(c => {
+      html += `<div class="cp-card" title="${pubEsc(pubSrcTitle(pub, c.field))}"><div class="cp-card-sub">${c.icon} ${c.label}</div><div class="pub-value" style="margin-top:4px;font-size:13px">${c.value}</div></div>`;
+    });
+    html += `</div>${buildSourcesHTML(iso)}</div>`;
   }
   
   html += `</div>`; // close cp-content
@@ -1941,12 +2056,12 @@ function handleDeeplinkV2() {
   const tryOpen = () => {
     const el = document.querySelector(`[data-iso="${countryISO}"]`);
     if(!el) { setTimeout(tryOpen, 300); return; }
-    if(tab) switchTab(tab === 'food' ? 'food' : tab === 'movies' ? 'movies' : tab);
+    if(tab && tab !== 'public') switchTab(tab === 'food' ? 'food' : tab === 'movies' ? 'movies' : tab);
     setTimeout(() => {
       // If tab specified, open full page and scroll to section
       openCountryPage(countryISO);
       if(tab) {
-        const sectionMap = {food:'cp-food',movies:'cp-movies',religion:'cp-religion',politics:'cp-politics',business:'cp-business',languages:'cp-languages'};
+        const sectionMap = {food:'cp-food',movies:'cp-movies',religion:'cp-religion',politics:'cp-politics',business:'cp-business',languages:'cp-languages',public:'cp-public'};
         const sid = sectionMap[tab];
         if(sid) setTimeout(() => cpScrollTo(sid), 500);
       }

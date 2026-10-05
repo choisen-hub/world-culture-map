@@ -68,6 +68,8 @@ world-culture-map/
   data-languages.js   LANG_FAMILIES and LANGUAGES_DATA: family, languages, greeting
   data-business.js    BIZ_INDUSTRIES and BUSINESS_DATA: dominant industry and companies
   data-regions.js     REGION_DATA: cities and regions with coordinates for the mini-map
+  data/countries.json Public dataset per ISO alpha-2 (Wikidata + CIA Factbook + Natural Earth), built by data/build_public.py
+  data/README.md      Source list, licences and the rebuild command for the public dataset
   _회수정보.md         Note (Korean) on how this copy was recovered from the deployed site
   LICENSE             MIT
 ```
@@ -102,6 +104,7 @@ Change the default UI language: set `localStorage['religion-map-lang']` to `ko`,
 
 - Country boundaries: `world-atlas` (Natural Earth derived, public domain) via jsDelivr.
 - Libraries: D3 (ISC), topojson-client (ISC), three.js (MIT). They are loaded from CDNs and are not vendored.
+- `data/countries.json` adds public fields (capital, population, currency, form of government, heads of state and government, official languages, Factbook religions, ethnic groups, languages, legal system) for 243 ISO codes, from Wikidata (CC0), the CIA World Factbook (public domain) and Natural Earth (public domain). It is loaded with `fetch()` when the page is served over HTTP and shows up as a "Public data" section plus a "Sources" line in the side panel and the full country page; on `file://` the app silently falls back to the curated tables. See `data/README.md` for the rebuild command.
 - Religion percentages, profiles, dishes, political facts, films, languages and companies were compiled by the author from public reference sources (the sidebar cites Pew Research Center 2020 for global religion shares; individual entries link to Wikipedia where a `wiki` field is present). Figures are approximate and were not updated after compilation; treat them as a study aid, not a citable dataset.
 - Flags are Unicode emoji.
 

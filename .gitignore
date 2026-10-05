@@ -17,3 +17,6 @@ snapshots.json
 *_cache.json
 *.pem
 *.key
+
+# public-data pipeline raw downloads (rebuild with: python3 data/build_public.py)
+data/raw/
